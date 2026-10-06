@@ -131,7 +131,7 @@ docker compose -f deploy/compose.yml ps
 curl --fail --retry 5 --retry-connrefused --retry-delay 1 http://127.0.0.1:8080/healthz
 ```
 
-Allow the selected VPN TCP port in the server/provider network rules. The panel check should return `ok`; it does not verify a VPN connection.
+Allow the selected VPN TCP port in the server/provider network rules. The panel check should return `ok`; it does not verify a VPN connection. On first startup, the panel can respond before the endpoint finishes its readiness check. Allow a few seconds, then refresh the overview and confirm that TrustTunnel is running before managing users.
 
 After a migration, test an existing VPN client. Once it connects successfully, disable the old service's autostart so it cannot take the container's port after a reboot. For the `trusttunnel` unit:
 

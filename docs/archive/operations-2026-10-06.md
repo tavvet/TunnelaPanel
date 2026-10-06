@@ -1,9 +1,11 @@
 # Migration and operations
 
+Addresses and backup directory identifiers are anonymized examples.
+
 Historical runbook for the first deployment. For general installation and
 maintenance instructions, start with the [project documentation](../../README.md).
 
-This runbook describes the initial installation on `root@82.40.58.67` and later
+This runbook describes the initial installation on `root@203.0.113.10` and later
 release updates. Production now runs under `/opt/tunnelapanel`. The original
 native installation under `/opt/trusttunnel` is retained for rollback.
 
@@ -33,7 +35,7 @@ Build locally; the server does not need a Go toolchain or a Git checkout:
 ```sh
 VERSION=initial ./scripts/package.sh
 scp dist/tunnelapanel-initial-linux-amd64.tar.gz \
-    dist/tunnelapanel-initial-linux-amd64.tar.gz.sha256 root@82.40.58.67:/root/
+    dist/tunnelapanel-initial-linux-amd64.tar.gz.sha256 root@203.0.113.10:/root/
 ```
 
 On the server, check the checksum, create the installation directory, and unpack:
@@ -70,7 +72,7 @@ the `live/` symlinks. Do not copy production passwords or private keys into the
 Git repository or release archives.
 
 Do not assume that the certificate paths point directly to regular files:
-`/etc/letsencrypt/live/dman.pancom.pw/` normally links into `archive/`. Compose
+`/etc/letsencrypt/live/vpn.example.com/` normally links into `archive/`. Compose
 mounts the entire `/etc/letsencrypt` tree read-only to keep renewal working.
 
 ## Import configuration
@@ -121,7 +123,7 @@ COMPOSE_PROFILES= PANEL_COOKIE_SECURE=false PANEL_TRUSTED_PROXIES= \
 Use an SSH forward to reach the staged panel and tunnel endpoint:
 
 ```sh
-ssh -L 18080:127.0.0.1:18080 -L 18443:127.0.0.1:18443 root@82.40.58.67
+ssh -L 18080:127.0.0.1:18080 -L 18443:127.0.0.1:18443 root@203.0.113.10
 ```
 
 Check panel login, user import, certificates, endpoint logs, the metrics health
@@ -175,7 +177,7 @@ preserved. Clients will reconnect during the brief service interruption.
 ## Panel access over SSH (initial default)
 
 ```sh
-ssh -N -L 8080:127.0.0.1:8080 root@82.40.58.67
+ssh -N -L 8080:127.0.0.1:8080 root@203.0.113.10
 ```
 
 Open `http://127.0.0.1:8080` in the browser and sign in as `admin`. Retrieve the initial password directly
@@ -192,7 +194,7 @@ unless a separate access design is implemented.
 
 ## HTTPS on the existing domain
 
-The selected public address is `https://dman.pancom.pw:8443`. TrustTunnel keeps
+The selected public address is `https://vpn.example.com:8443`. TrustTunnel keeps
 TCP 443, family-proxy keeps UDP 443, and Certbot's existing standalone HTTP-01
 challenge keeps port 80. No DNS change or extra certificate is required.
 
@@ -203,7 +205,7 @@ existing Docker/VPN routes. In `deploy/.env`, set:
 ```ini
 COMPOSE_PROFILES=https
 PANEL_COOKIE_SECURE=true
-PANEL_ALLOWED_HOSTS=dman.pancom.pw
+PANEL_ALLOWED_HOSTS=vpn.example.com
 PANEL_TRUSTED_PROXIES=172.30.80.3
 PANEL_PROXY_SUBNET=172.30.80.0/29
 PANEL_PROXY_IP=172.30.80.3
@@ -237,7 +239,7 @@ still works. If the bootstrap password file still exists, the read-only check is
 
 ```sh
 python3 scripts/smoke-test.py --panel-port 8080 --endpoint-port 443 \
-  --panel-url https://dman.pancom.pw:8443
+  --panel-url https://vpn.example.com:8443
 ```
 
 To roll back HTTPS only, stop `https`, restore the saved `.env` and hook, then
@@ -257,7 +259,7 @@ checks `nginx -t` and sends HUP for a graceful certificate reload. Both consumer
 are attempted even if one reload fails; any failure returns a nonzero status.
 
 The hook ignores renewals for other lineages. Its default lineage is
-`/etc/letsencrypt/live/dman.pancom.pw`; edit the installed default if the certificate
+`/etc/letsencrypt/live/vpn.example.com`; edit the installed default if the certificate
 name changes. `TT_CERT_LINEAGE` and `TT_PANEL_DIR` can override the defaults when
 the hook is invoked manually.
 
@@ -269,7 +271,7 @@ hook_backup=$(mktemp -d /root/trusttunnel-hook.XXXXXX)
 cp -p /etc/letsencrypt/renewal-hooks/deploy/trusttunnel.sh "$hook_backup/"
 install -m 755 deploy/certbot-deploy-hook.sh \
   /etc/letsencrypt/renewal-hooks/deploy/trusttunnel.sh
-RENEWED_LINEAGE=/etc/letsencrypt/live/dman.pancom.pw \
+RENEWED_LINEAGE=/etc/letsencrypt/live/vpn.example.com \
   /etc/letsencrypt/renewal-hooks/deploy/trusttunnel.sh
 ```
 

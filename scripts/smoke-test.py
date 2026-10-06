@@ -18,7 +18,7 @@ import urllib.request
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--panel-port", type=int, required=True)
-    parser.add_argument("--panel-url", help="HTTPS panel origin instead of loopback HTTP, e.g. https://dman.pancom.pw:8443")
+    parser.add_argument("--panel-url", help="HTTPS panel origin instead of loopback HTTP, e.g. https://vpn.example.com:8443")
     parser.add_argument("--endpoint-port", type=int, required=True)
     parser.add_argument("--root", type=Path, default=Path("/opt/tunnelapanel"))
     parser.add_argument("--native", type=Path, default=Path("/opt/trusttunnel"))

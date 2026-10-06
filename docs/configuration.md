@@ -89,6 +89,8 @@ These cases need manual adaptation. Preserve custom protocol options, filtering 
 
 TrustTunnel 1.1.0 has quote-sensitive credential parsing. Keep existing credential bytes during migration; changing TOML quote style can change the effective password.
 
+Review `forward_protocol.socks5.address`, `reverse_proxy.server_address`, and any other dependencies on services running on the host. The importer does not adapt network destinations. Inside the endpoint container, `127.0.0.1` and `::1` refer to that container, not the host. Before stopping the native service, verify that each required service is actually reachable from the endpoint container and adapt the imported configuration where necessary.
+
 ## Continue installation
 
 Return to [step 4: start the containers](./installation.md#4-start-the-containers). During migration, verify an existing client's VPN connection before disabling the old service's autostart.

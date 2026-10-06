@@ -80,10 +80,10 @@ services:
       TT_CONFIG_DIR: /data/config
       TT_STATE_DIR: /data/state
       TT_SOCKET: /run/tunnelapanel/control.sock
-      TT_PUBLIC_ADDRESS: "${TT_PUBLIC_ADDRESS:-dman.pancom.pw:443}"
+      TT_PUBLIC_ADDRESS: "${TT_PUBLIC_ADDRESS:-vpn.example.com:443}"
       TT_METRICS_URL: http://127.0.0.1:1987
     ports:
-      # TCP only: UDP 443 belongs to the existing family-proxy service.
+      # TCP only: QUIC/HTTP3 requires a separate UDP port configuration.
       - "${TT_BIND_IP:-0.0.0.0}:${TT_PORT:-443}:8443/tcp"
     volumes:
       - ../runtime/config:/data/config

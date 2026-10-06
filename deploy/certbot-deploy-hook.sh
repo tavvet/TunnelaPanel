@@ -2,7 +2,7 @@
 # Certbot deploy hook: reload TrustTunnel and the optional HTTPS panel proxy.
 set -eu
 
-lineage=${TT_CERT_LINEAGE:-/etc/letsencrypt/live/dman.pancom.pw}
+lineage=${TT_CERT_LINEAGE:-/etc/letsencrypt/live/vpn.example.com}
 panel_dir=${TT_PANEL_DIR:-/opt/tunnelapanel}
 
 # Certbot runs global deploy hooks for every renewed certificate. Ignore others.

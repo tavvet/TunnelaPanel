@@ -1,10 +1,12 @@
 # Deployment record — 6 October 2026
 
+Addresses and backup directory identifiers are anonymized examples.
+
 Historical record for one deployment. For general installation and maintenance
 instructions, start with the [project documentation](../../README.md).
 
 The initial migration used version 0.1.0; version 0.2.0 now runs at
-`/opt/tunnelapanel` on `82.40.58.67` (Ubuntu 24.04, amd64), with public HTTPS for
+`/opt/tunnelapanel` on `203.0.113.10` (Ubuntu 24.04, amd64), with public HTTPS for
 the panel. Delivery uses a source-and-binary archive plus SHA-256; there is no Git
 checkout or Go toolchain requirement on the server. `RELEASE` records the source
 commit packaged with the binaries.
@@ -13,16 +15,16 @@ commit packaged with the binaries.
 
 | Service | Endpoint | State |
 | --- | --- | --- |
-| TrustTunnel 1.1.0 | `dman.pancom.pw:443`, TCP | Compose `tunnelapanel`, service `endpoint` |
+| TrustTunnel 1.1.0 | `vpn.example.com:443`, TCP | Compose `tunnelapanel`, service `endpoint` |
 | TunnelaPanel | `127.0.0.1:8080`, TCP | Compose `tunnelapanel`, service `panel` |
-| Panel HTTPS | `https://dman.pancom.pw:8443` | Compose `https`, nginx 1.30.5 |
+| Panel HTTPS | `https://vpn.example.com:8443` | Compose `https`, nginx 1.30.5 |
 | family-proxy | UDP 443 | Existing systemd service, PID 776 unchanged |
 | Amnezia AWG | UDP 47222 | Existing `amnezia-awg` container, not restarted |
 
 The native TrustTunnel service is stopped and disabled. `/opt/trusttunnel` and
 its service file are retained for rollback. A root-only pre-migration backup of
 the native installation, service and Let's Encrypt tree is stored at
-`/root/trusttunnel-before-panel.Oyz5HK/native-and-certificates.tar.gz`.
+`/root/trusttunnel-before-panel.EXAMPLE/native-and-certificates.tar.gz`.
 
 ## Verified
 
@@ -47,12 +49,12 @@ installation, preserving the existing UDP 443 owner.
 
 ## Access
 
-Open [https://dman.pancom.pw:8443](https://dman.pancom.pw:8443), username `admin`.
+Open [https://vpn.example.com:8443](https://vpn.example.com:8443), username `admin`.
 The existing administrator password is unchanged. If it has not yet been
 changed in Settings, retrieve the initial password with:
 
 ```sh
-ssh root@82.40.58.67 'cat /opt/tunnelapanel/runtime/panel/bootstrap-password'
+ssh root@203.0.113.10 'cat /opt/tunnelapanel/runtime/panel/bootstrap-password'
 ```
 
 Change it under Settings after signing in. No passwords, private keys or real
@@ -86,7 +88,7 @@ remains available independently over HTTPS.
   container restarts; its workers run under the image's nginx UID 101.
 
 Pre-HTTPS configuration and renewal hook backup:
-`/root/tunnelapanel-before-https.MmhuIe/config-and-hook.tar.gz`.
+`/root/tunnelapanel-before-https.EXAMPLE/config-and-hook.tar.gz`.
 The previous panel image is retained as `tunnelapanel-panel:0.1.2`; the previous
 0.1.2 release archive remains in `/root`. The original native migration backup
 listed above is also retained.

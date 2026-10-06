@@ -58,6 +58,25 @@ If `endpoint` keeps restarting, check the TOML files, certificate paths and whet
 docker compose -f deploy/compose.yml --profile https logs --tail=100 https
 ```
 
-After migration, manage users through the panel. External changes to `credentials.toml` block applying edits, and a mismatch with saved state prevents agent startup. Preserve the current files, identify the external change and restore a matching configuration/state pair from backup before resuming.
+After migration, manage users through the panel. External changes to `credentials.toml` block applying edits, and a mismatch with saved state prevents agent startup. Identify the external change before choosing a recovery snapshot.
+
+## Restore configuration and agent state
+
+The agent keeps state in memory, and TrustTunnel loads credentials at startup. Restoring files requires stopping both services and interrupts VPN connections:
+
+```sh
+docker compose -f deploy/compose.yml stop panel endpoint
+```
+
+Preserve the current directories for recovery, then replace **both complete `runtime/config/` and `runtime/state/` directories from the same consistent snapshot**, retaining ownership and permissions. Do not overlay selected files: a leftover `apply.json` can overwrite the restored state on startup.
+
+Automatic files in `runtime/state/backups/` are JSON records containing credentials and agent state, not ready-to-restore directory snapshots. There is no automatic restore helper for these records.
+
+```sh
+docker compose -f deploy/compose.yml up -d --no-deps endpoint panel
+docker compose -f deploy/compose.yml ps
+```
+
+Sign in again, check the users and endpoint status in the panel, and verify an actual VPN connection before resuming administration.
 
 See [Development](development.md) for local checks and the scope of the migration smoke test.
