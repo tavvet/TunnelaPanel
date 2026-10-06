@@ -32,7 +32,7 @@ go build -trimpath -buildvcs=false -ldflags='-s -w' -o "$stage_dir/dist/endpoint
 
 # Explicit allowlist. Never archive .git, runtime/, .env, .cache/, or old releases.
 source_paths=()
-for source_path in cmd internal deploy scripts docs go.mod go.sum README.md Makefile; do
+for source_path in cmd internal deploy scripts docs go.mod go.sum README.md README.ru.md Makefile; do
   if [[ -e "$source_path" ]]; then
     source_paths+=("$source_path")
   fi

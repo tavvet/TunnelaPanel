@@ -1,5 +1,8 @@
 # Deployment record — 6 October 2026
 
+Historical record for one deployment. For general installation and maintenance
+instructions, start with the [project documentation](../../README.md).
+
 The initial migration used version 0.1.0; version 0.2.0 now runs at
 `/opt/tunnelapanel` on `82.40.58.67` (Ubuntu 24.04, amd64), with public HTTPS for
 the panel. Delivery uses a source-and-binary archive plus SHA-256; there is no Git
@@ -56,7 +59,7 @@ Change it under Settings after signing in. No passwords, private keys or real
 VPN configurations are stored in this repository. Persistent runtime state is
 stored only on the server under `/opt/tunnelapanel/runtime`.
 
-See [operations.md](operations.md) for updates, backups and rollback. Changing
+See [the original runbook](operations-2026-10-06.md) for this deployment's updates, backups and rollback. Changing
 users restarts TrustTunnel and interrupts current VPN connections; the panel
 remains available independently over HTTPS.
 
