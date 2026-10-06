@@ -27,20 +27,24 @@ type managedUser struct {
 	Fields  map[string]any
 	Enabled bool
 }
+
 type document struct {
 	Root  map[string]any
 	Users []managedUser
 }
+
 type snapshot struct {
 	TOML    string          `json:"toml"`
 	Enabled map[string]bool `json:"enabled"`
 }
+
 type savedState struct {
 	Version int      `json:"version"`
 	Hash    string   `json:"credentials_hash"`
 	Applied snapshot `json:"applied"`
 	Draft   snapshot `json:"draft"`
 }
+
 type store struct {
 	path, statePath string
 	applied, draft  document
@@ -148,6 +152,7 @@ func basicString(s string) string {
 	_ = e.Encode(s)
 	return strings.TrimSuffix(b.String(), "\n")
 }
+
 func sortedKeys(m map[string]any) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -156,6 +161,7 @@ func sortedKeys(m map[string]any) []string {
 	sort.Strings(keys)
 	return keys
 }
+
 func (d document) encode(activeOnly bool) ([]byte, error) {
 	var b bytes.Buffer
 	write := func(m map[string]any) error {
@@ -168,6 +174,7 @@ func (d document) encode(activeOnly bool) ([]byte, error) {
 		}
 		return nil
 	}
+
 	if err := write(d.Root); err != nil {
 		return nil, err
 	}
@@ -182,6 +189,7 @@ func (d document) encode(activeOnly bool) ([]byte, error) {
 	}
 	return b.Bytes(), nil
 }
+
 func (d document) save() (snapshot, error) {
 	b, err := d.encode(false)
 	s := snapshot{TOML: string(b), Enabled: map[string]bool{}}
@@ -190,6 +198,7 @@ func (d document) save() (snapshot, error) {
 	}
 	return s, err
 }
+
 func restore(s snapshot) (document, error) {
 	d, err := parseDocument([]byte(s.TOML))
 	if err != nil {
@@ -208,6 +217,7 @@ func restore(s snapshot) (document, error) {
 	}
 	return d, nil
 }
+
 func clone(d document) document {
 	s, err := d.save()
 	if err != nil {
@@ -219,7 +229,12 @@ func clone(d document) document {
 	}
 	return out
 }
-func digest(b []byte) string { sum := sha256.Sum256(b); return hex.EncodeToString(sum[:]) }
+
+func digest(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
 func newStore(credentials, stateDir string) (*store, error) {
 	if err := os.MkdirAll(stateDir, 0700); err != nil {
 		return nil, errors.New("cannot create state directory")
@@ -235,7 +250,14 @@ func newStore(credentials, stateDir string) (*store, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &store{path: credentials, statePath: filepath.Join(stateDir, "state.json"), applied: d, draft: clone(d), hash: digest(b)}
+
+	s := &store{
+		path:      credentials,
+		statePath: filepath.Join(stateDir, "state.json"),
+		applied:   d,
+		draft:     clone(d),
+		hash:      digest(b),
+	}
 	stateBytes, err := os.ReadFile(s.statePath)
 	if err == nil {
 		var saved savedState
@@ -261,6 +283,7 @@ func newStore(credentials, stateDir string) (*store, error) {
 	}
 	return s, nil
 }
+
 func atomicWrite(path string, b []byte) error {
 	f, err := os.CreateTemp(filepath.Dir(path), ".tunnelapanel-*")
 	if err != nil {
@@ -303,6 +326,7 @@ func durableRemove(path string) error {
 	defer dir.Close()
 	return dir.Sync()
 }
+
 func (s *store) persist() error {
 	a, err := s.applied.save()
 	if err != nil {
@@ -312,7 +336,12 @@ func (s *store) persist() error {
 	if err != nil {
 		return err
 	}
-	b, err := json.Marshal(savedState{Version: 1, Hash: s.hash, Applied: a, Draft: d})
+	b, err := json.Marshal(savedState{
+		Version: 1,
+		Hash:    s.hash,
+		Applied: a,
+		Draft:   d,
+	})
 	if err != nil {
 		return err
 	}
@@ -321,6 +350,7 @@ func (s *store) persist() error {
 	}
 	return nil
 }
+
 func (s *store) drift() error {
 	b, err := os.ReadFile(s.path)
 	if err != nil {
@@ -331,11 +361,13 @@ func (s *store) drift() error {
 	}
 	return nil
 }
+
 func (s *store) pending() bool {
 	a, _ := s.applied.save()
 	d, _ := s.draft.save()
 	return !reflect.DeepEqual(a, d)
 }
+
 func enabledCount(d document) int {
 	n := 0
 	for _, u := range d.Users {
@@ -345,6 +377,7 @@ func enabledCount(d document) int {
 	}
 	return n
 }
+
 func (s *store) list() protocol.Users {
 	out := protocol.Users{Users: []protocol.User{}, Pending: s.pending()}
 	for _, u := range s.draft.Users {
@@ -361,6 +394,7 @@ func (s *store) list() protocol.Users {
 	}
 	return out
 }
+
 func validPassword(p string) bool {
 	if len(p) < 12 || len(p) > 256 || strings.TrimSpace(p) != p {
 		return false
@@ -372,6 +406,7 @@ func validPassword(p string) bool {
 	}
 	return true
 }
+
 func (s *store) change(method string, c protocol.UserChange) error {
 	if !usernamePattern.MatchString(c.Username) {
 		return errors.New("username must contain 1–64 letters, digits, _, ., @ or -")
@@ -379,6 +414,7 @@ func (s *store) change(method string, c protocol.UserChange) error {
 	if c.Password != "" && !validPassword(c.Password) {
 		return errors.New("password must be 12–256 printable ASCII characters, without quotes, backslashes or surrounding whitespace")
 	}
+
 	old := clone(s.draft)
 	idx := -1
 	for i, u := range s.draft.Users {
@@ -387,6 +423,7 @@ func (s *store) change(method string, c protocol.UserChange) error {
 			break
 		}
 	}
+
 	switch method {
 	case "POST":
 		if idx >= 0 {
@@ -399,7 +436,13 @@ func (s *store) change(method string, c protocol.UserChange) error {
 		if c.Enabled != nil {
 			enabled = *c.Enabled
 		}
-		s.draft.Users = append(s.draft.Users, managedUser{Fields: map[string]any{"username": c.Username, "password": c.Password}, Enabled: enabled})
+		s.draft.Users = append(s.draft.Users, managedUser{
+			Fields: map[string]any{
+				"username": c.Username,
+				"password": c.Password,
+			},
+			Enabled: enabled,
+		})
 	case "PATCH":
 		if idx < 0 {
 			return errors.New("user not found")
@@ -418,6 +461,7 @@ func (s *store) change(method string, c protocol.UserChange) error {
 	default:
 		return errors.New("unsupported user operation")
 	}
+
 	if enabledCount(s.draft) == 0 {
 		s.draft = old
 		return errors.New("at least one enabled user must remain")

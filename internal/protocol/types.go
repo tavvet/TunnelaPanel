@@ -55,9 +55,11 @@ type Certificate struct {
 type LogResponse struct {
 	Lines []string `json:"lines"`
 }
+
 type Result struct {
 	Message string `json:"message"`
 }
+
 type Error struct {
 	Error string `json:"error"`
 }

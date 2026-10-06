@@ -36,6 +36,7 @@ func testStore(t *testing.T) *store {
 	}
 	return s
 }
+
 func TestPreservesUnknownValuesAndBasicQuotedPasswords(t *testing.T) {
 	d, err := parseDocument([]byte(fixtureCredentials))
 	if err != nil {
@@ -64,19 +65,29 @@ func TestPreservesUnknownValuesAndBasicQuotedPasswords(t *testing.T) {
 		t.Fatal("float became an integer")
 	}
 }
+
 func TestDraftLifecycleAndLastEnabledProtection(t *testing.T) {
 	s := testStore(t)
 	off, on := false, true
-	if err := s.change("PATCH", protocol.UserChange{Username: "existing", Enabled: &off}); err == nil {
+	if err := s.change("PATCH", protocol.UserChange{
+		Username: "existing",
+		Enabled:  &off,
+	}); err == nil {
 		t.Fatal("disabled last enabled user")
 	}
 	if err := s.change("DELETE", protocol.UserChange{Username: "existing"}); err == nil {
 		t.Fatal("deleted last enabled user")
 	}
-	if err := s.change("POST", protocol.UserChange{Username: "new", Password: "safe-password-123"}); err != nil {
+	if err := s.change("POST", protocol.UserChange{
+		Username: "new",
+		Password: "safe-password-123",
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.change("PATCH", protocol.UserChange{Username: "existing", Enabled: &off}); err != nil {
+	if err := s.change("PATCH", protocol.UserChange{
+		Username: "existing",
+		Enabled:  &off,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if !s.pending() {
@@ -93,7 +104,10 @@ func TestDraftLifecycleAndLastEnabledProtection(t *testing.T) {
 	if !reflect.DeepEqual(s.draft, reloaded.draft) {
 		t.Fatal("draft lost on reload")
 	}
-	if err := reloaded.change("PATCH", protocol.UserChange{Username: "existing", Enabled: &on}); err != nil {
+	if err := reloaded.change("PATCH", protocol.UserChange{
+		Username: "existing",
+		Enabled:  &on,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if reloaded.draft.Users[0].Fields["password"] != "oldpass" {
@@ -111,6 +125,7 @@ func TestDraftLifecycleAndLastEnabledProtection(t *testing.T) {
 		t.Fatal("state permissions are not private")
 	}
 }
+
 func TestRejectsCredentialsDrift(t *testing.T) {
 	s := testStore(t)
 	if err := os.WriteFile(s.path, []byte(fixtureCredentials+"\n# operator change\n"), 0600); err != nil {
@@ -123,8 +138,17 @@ func TestRejectsCredentialsDrift(t *testing.T) {
 		t.Fatal("external changes ignored on restart")
 	}
 }
+
 func TestPasswordValidation(t *testing.T) {
-	for _, p := range []string{"short", `bad"password123`, `bad\password123`, " badpassword123", "badpassword123 ", "badpasswordé123", "badpassword\n123"} {
+	for _, p := range []string{
+		"short",
+		`bad"password123`,
+		`bad\password123`,
+		" badpassword123",
+		"badpassword123 ",
+		"badpasswordé123",
+		"badpassword\n123",
+	} {
 		if validPassword(p) {
 			t.Errorf("accepted unsafe password %q", p)
 		}
@@ -133,6 +157,7 @@ func TestPasswordValidation(t *testing.T) {
 		t.Fatal("safe ASCII password rejected")
 	}
 }
+
 func TestLogRedactionAndBounds(t *testing.T) {
 	r := &logRing{}
 	d, _ := parseDocument([]byte(fixtureCredentials))

@@ -24,9 +24,11 @@ func reply(w http.ResponseWriter, code int, value any) {
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(value)
 }
+
 func fail(w http.ResponseWriter, code int, err error) {
 	reply(w, code, protocol.Error{Error: err.Error()})
 }
+
 func decodeChange(w http.ResponseWriter, r *http.Request) (protocol.UserChange, error) {
 	var c protocol.UserChange
 	d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
@@ -69,8 +71,10 @@ func (a *Agent) Handler() http.Handler {
 			reply(w, 200, v)
 			return
 		}
+
 		a.mu.Lock()
 		defer a.mu.Unlock()
+
 		switch {
 		case r.URL.Path == "/v1/status" && r.Method == http.MethodGet:
 			s := a.process.status()
@@ -82,7 +86,8 @@ func (a *Agent) Handler() http.Handler {
 			reply(w, 200, s)
 		case r.URL.Path == "/v1/users" && r.Method == http.MethodGet:
 			reply(w, 200, a.store.list())
-		case r.URL.Path == "/v1/users" && (r.Method == http.MethodPost || r.Method == http.MethodPatch || r.Method == http.MethodDelete):
+		case r.URL.Path == "/v1/users" &&
+			(r.Method == http.MethodPost || r.Method == http.MethodPatch || r.Method == http.MethodDelete):
 			c, err := decodeChange(w, r)
 			if err != nil {
 				fail(w, 400, err)
@@ -162,6 +167,7 @@ func (a *Agent) Serve(ctx context.Context) error {
 	monitorCtx, stopMonitor := context.WithCancel(ctx)
 	defer stopMonitor()
 	go a.monitor(monitorCtx)
+
 	dir := filepath.Dir(a.config.Socket)
 	if os.MkdirAll(dir, 0700) != nil {
 		return errors.New("cannot create control socket directory")
@@ -184,6 +190,7 @@ func (a *Agent) Serve(ctx context.Context) error {
 	} else if !os.IsNotExist(err) {
 		return errors.New("cannot inspect control socket")
 	}
+
 	listener, err := net.Listen("unix", a.config.Socket)
 	if err != nil {
 		return errors.New("cannot open control socket")
@@ -193,7 +200,15 @@ func (a *Agent) Serve(ctx context.Context) error {
 	if os.Chmod(a.config.Socket, 0600) != nil {
 		return errors.New("cannot secure control socket")
 	}
-	server := &http.Server{Handler: a.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8 << 10}
+
+	server := &http.Server{
+		Handler:           a.Handler(),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       30 * time.Second,
+		MaxHeaderBytes:    8 << 10,
+	}
 	stopped := make(chan struct{})
 	defer close(stopped)
 	go func() {
@@ -205,6 +220,7 @@ func (a *Agent) Serve(ctx context.Context) error {
 		case <-stopped:
 		}
 	}()
+
 	err = server.Serve(listener)
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
@@ -224,11 +240,21 @@ func (a *Agent) clients(ctx context.Context) ([]protocol.ClientMetric, error) {
 	u.Path = strings.TrimRight(u.Path, "/") + "/clients"
 	u.RawQuery = ""
 	u.Fragment = ""
+
 	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 	if err != nil {
 		return nil, errors.New("cannot create metrics request")
 	}
-	client := http.Client{Timeout: 3 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }, Transport: &http.Transport{Proxy: nil, DisableKeepAlives: true}}
+	client := http.Client{
+		Timeout: 3 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+		Transport: &http.Transport{
+			Proxy:             nil,
+			DisableKeepAlives: true,
+		},
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, errors.New("endpoint metrics are unavailable")
@@ -237,6 +263,7 @@ func (a *Agent) clients(ctx context.Context) ([]protocol.ClientMetric, error) {
 	if resp.StatusCode != 200 {
 		return nil, errors.New("endpoint metrics returned an error")
 	}
+
 	var metrics []protocol.ClientMetric
 	if json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(&metrics) != nil {
 		return nil, errors.New("invalid endpoint metrics")
@@ -246,6 +273,7 @@ func (a *Agent) clients(ctx context.Context) ([]protocol.ClientMetric, error) {
 	}
 	return metrics, nil
 }
+
 func (a *Agent) certificates() ([]protocol.Certificate, error) {
 	doc, _, err := readTOML(filepath.Join(a.config.ConfigDir, "hosts.toml"))
 	if err != nil {

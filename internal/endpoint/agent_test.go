@@ -80,6 +80,7 @@ func TestHelperEndpoint(t *testing.T) {
 	<-ch
 	os.Exit(0)
 }
+
 func newTestAgent(t *testing.T) *Agent {
 	t.Helper()
 	dir := t.TempDir()
@@ -94,37 +95,60 @@ func newTestAgent(t *testing.T) *Agent {
 	addr := l.Addr().String()
 	l.Close()
 	vpn := fmt.Sprintf("listen_address = %q\ncredentials_file = \"credentials.toml\"\n", addr)
-	for name, b := range map[string]string{"vpn.toml": vpn, "hosts.toml": "", "credentials.toml": fixtureCredentials} {
+	for name, b := range map[string]string{
+		"vpn.toml":         vpn,
+		"hosts.toml":       "",
+		"credentials.toml": fixtureCredentials,
+	} {
 		if err := os.WriteFile(filepath.Join(config, name), []byte(b), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
+
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
 	wrapper := filepath.Join(dir, "endpoint")
-	script := "#!/bin/sh\nTUNNELAPANEL_TEST_ENDPOINT=1 exec '" + strings.ReplaceAll(exe, "'", "'\\''") + "' -test.run=^TestHelperEndpoint$ -- \"$@\"\n"
+	script := "#!/bin/sh\nTUNNELAPANEL_TEST_ENDPOINT=1 exec '" +
+		strings.ReplaceAll(exe, "'", "'\\''") +
+		"' -test.run=^TestHelperEndpoint$ -- \"$@\"\n"
 	if err := os.WriteFile(wrapper, []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
-	a, err := New(Config{Binary: wrapper, ConfigDir: config, StateDir: filepath.Join(dir, "state"), Socket: filepath.Join(dir, "control.sock"), PublicAddress: "vpn.example.com:443", ReadyTimeout: time.Second, StableTime: 100 * time.Millisecond, StopTimeout: time.Second})
+
+	a, err := New(Config{
+		Binary:        wrapper,
+		ConfigDir:     config,
+		StateDir:      filepath.Join(dir, "state"),
+		Socket:        filepath.Join(dir, "control.sock"),
+		PublicAddress: "vpn.example.com:443",
+		ReadyTimeout:  time.Second,
+		StableTime:    100 * time.Millisecond,
+		StopTimeout:   time.Second,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = a.Close() })
+	t.Cleanup(func() {
+		_ = a.Close()
+	})
 	if err := a.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	return a
 }
+
 func TestFailedApplyRollsBackAndKeepsDraft(t *testing.T) {
 	a := newTestAgent(t)
 	old, err := os.ReadFile(a.store.path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := a.store.change("PATCH", protocol.UserChange{Username: "existing", Password: "fail-startup-123"}); err != nil {
+	if err := a.store.change("PATCH", protocol.UserChange{
+		Username: "existing",
+		Password: "fail-startup-123",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	err = a.apply(context.Background())
@@ -145,9 +169,13 @@ func TestFailedApplyRollsBackAndKeepsDraft(t *testing.T) {
 		t.Fatal("completed rollback left transaction journal")
 	}
 }
+
 func TestSuccessfulApplyAndAppliedOnlyExports(t *testing.T) {
 	a := newTestAgent(t)
-	if err := a.store.change("POST", protocol.UserChange{Username: "new", Password: "safe-password-123"}); err != nil {
+	if err := a.store.change("POST", protocol.UserChange{
+		Username: "new",
+		Password: "safe-password-123",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	request := func(user string) *httptest.ResponseRecorder {
@@ -177,6 +205,7 @@ func TestSuccessfulApplyAndAppliedOnlyExports(t *testing.T) {
 		t.Fatal("credentials backup missing")
 	}
 }
+
 func TestInterruptedApplyRecovery(t *testing.T) {
 	s := testStore(t)
 	before, _ := os.ReadFile(s.path)
@@ -203,7 +232,10 @@ func TestInterruptedApplyRecovery(t *testing.T) {
 
 func TestUnexpectedExitCanRecoverWithoutApplyingDraft(t *testing.T) {
 	a := newTestAgent(t)
-	if err := a.store.change("PATCH", protocol.UserChange{Username: "existing", Password: "fail-startup-123"}); err != nil {
+	if err := a.store.change("PATCH", protocol.UserChange{
+		Username: "existing",
+		Password: "fail-startup-123",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	a.process.mu.Lock()

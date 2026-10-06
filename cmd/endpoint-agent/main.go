@@ -16,9 +16,11 @@ func main() {
 		os.Exit(1)
 	}
 }
+
 func run() error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+
 	agent, err := endpoint.New(endpoint.ConfigFromEnv())
 	if err != nil {
 		return err
@@ -42,5 +44,6 @@ func run() error {
 			}
 		}
 	}()
+
 	return agent.Serve(ctx)
 }

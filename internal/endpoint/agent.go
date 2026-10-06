@@ -18,6 +18,7 @@ type Agent struct {
 	process *supervisor
 	logs    *logRing
 }
+
 type transaction struct {
 	Credentials []byte `json:"credentials"`
 	State       []byte `json:"state"`
@@ -34,6 +35,7 @@ func New(c Config) (*Agent, error) {
 	if err = recoverTransaction(c.StateDir, credentials); err != nil {
 		return nil, err
 	}
+
 	s, err := newStore(credentials, c.StateDir)
 	if err != nil {
 		return nil, err
@@ -41,8 +43,19 @@ func New(c Config) (*Agent, error) {
 	logs := &logRing{}
 	logs.addSecrets(s.applied)
 	logs.addSecrets(s.draft)
-	return &Agent{config: c, store: s, logs: logs, process: &supervisor{config: c, listener: listener, logs: logs}}, nil
+
+	return &Agent{
+		config: c,
+		store:  s,
+		logs:   logs,
+		process: &supervisor{
+			config:   c,
+			listener: listener,
+			logs:     logs,
+		},
+	}, nil
 }
+
 func recoverTransaction(stateDir, credentials string) error {
 	path := filepath.Join(stateDir, "apply.json")
 	b, err := os.ReadFile(path)
@@ -56,7 +69,8 @@ func recoverTransaction(stateDir, credentials string) error {
 	if json.Unmarshal(b, &tx) != nil || len(tx.Credentials) == 0 || len(tx.State) == 0 {
 		return errors.New("invalid interrupted apply journal")
 	}
-	if atomicWrite(credentials, tx.Credentials) != nil || atomicWrite(filepath.Join(stateDir, "state.json"), tx.State) != nil {
+	if atomicWrite(credentials, tx.Credentials) != nil ||
+		atomicWrite(filepath.Join(stateDir, "state.json"), tx.State) != nil {
 		return errors.New("cannot recover interrupted apply")
 	}
 	if durableRemove(path) != nil {
@@ -64,6 +78,7 @@ func recoverTransaction(stateDir, credentials string) error {
 	}
 	return nil
 }
+
 func (a *Agent) apply(ctx context.Context) error {
 	if err := a.store.drift(); err != nil {
 		return err
@@ -71,6 +86,7 @@ func (a *Agent) apply(ctx context.Context) error {
 	if !a.store.pending() {
 		return nil
 	}
+
 	oldBytes, err := os.ReadFile(a.store.path)
 	if err != nil {
 		return errors.New("cannot read active credentials")
@@ -83,6 +99,7 @@ func (a *Agent) apply(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	backupDir := filepath.Join(a.config.StateDir, "backups")
 	if os.MkdirAll(backupDir, 0700) != nil {
 		return errors.New("cannot create backup directory")
@@ -99,6 +116,7 @@ func (a *Agent) apply(ctx context.Context) error {
 	if atomicWrite(journal, tx) != nil {
 		return errors.New("cannot create apply journal")
 	}
+
 	oldApplied, oldHash := a.store.applied, a.store.hash
 	rollback := func(cause error) error {
 		_ = a.process.stop()
@@ -116,12 +134,14 @@ func (a *Agent) apply(ctx context.Context) error {
 		_ = durableRemove(journal)
 		return errors.New(cause.Error() + "; previous settings restored")
 	}
+
 	if atomicWrite(a.store.path, newBytes) != nil {
 		return rollback(errors.New("cannot write new credentials"))
 	}
 	if err := a.process.restart(ctx); err != nil {
 		return rollback(err)
 	}
+
 	a.store.applied = clone(a.store.draft)
 	a.store.hash = digest(newBytes)
 	if err := a.store.persist(); err != nil {
@@ -132,14 +152,25 @@ func (a *Agent) apply(ctx context.Context) error {
 	}
 	return nil
 }
+
 func (a *Agent) Start(ctx context.Context) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.process.readVersion()
 	return a.process.restart(ctx)
 }
-func (a *Agent) Close() error     { a.mu.Lock(); defer a.mu.Unlock(); return a.process.stop() }
-func (a *Agent) ReloadTLS() error { a.mu.Lock(); defer a.mu.Unlock(); return a.reloadTLS() }
+
+func (a *Agent) Close() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.process.stop()
+}
+
+func (a *Agent) ReloadTLS() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.reloadTLS()
+}
 
 func (a *Agent) reloadTLS() error {
 	doc, _, err := readTOML(filepath.Join(a.config.ConfigDir, "hosts.toml"))

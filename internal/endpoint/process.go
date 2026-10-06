@@ -35,6 +35,7 @@ func (r *logRing) redact(s string) string {
 	}
 	return secretField.ReplaceAllString(s, "$1$2[redacted]")
 }
+
 func (r *logRing) addSecrets(d document) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -47,6 +48,7 @@ func (r *logRing) addSecrets(d document) {
 		}
 	}
 }
+
 func (r *logRing) Write(p []byte) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -72,6 +74,7 @@ func (r *logRing) Write(p []byte) (int, error) {
 	}
 	return len(p), nil
 }
+
 func (r *logRing) read() protocol.LogResponse {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -96,13 +99,18 @@ type supervisor struct {
 func (p *supervisor) status() protocol.Status {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	s := protocol.Status{StartedAt: p.started, Version: p.version, LastError: p.lastError}
+	s := protocol.Status{
+		StartedAt: p.started,
+		Version:   p.version,
+		LastError: p.lastError,
+	}
 	if p.cmd != nil {
 		s.Running = true
 		s.PID = p.cmd.Process.Pid
 	}
 	return s
 }
+
 func (p *supervisor) readVersion() {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -113,6 +121,7 @@ func (p *supervisor) readVersion() {
 		p.mu.Unlock()
 	}
 }
+
 func (p *supervisor) start() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -125,7 +134,12 @@ func (p *supervisor) start() error {
 		p.lastError = "endpoint listener is already occupied"
 		return errors.New(p.lastError)
 	}
-	cmd := exec.Command(p.config.Binary, filepath.Join(p.config.ConfigDir, "vpn.toml"), filepath.Join(p.config.ConfigDir, "hosts.toml"))
+
+	cmd := exec.Command(
+		p.config.Binary,
+		filepath.Join(p.config.ConfigDir, "vpn.toml"),
+		filepath.Join(p.config.ConfigDir, "hosts.toml"),
+	)
 	cmd.Dir = p.config.ConfigDir
 	cmd.Stdout = p.logs
 	cmd.Stderr = p.logs
@@ -133,6 +147,7 @@ func (p *supervisor) start() error {
 		p.lastError = "cannot start endpoint process"
 		return errors.New(p.lastError)
 	}
+
 	p.cmd = cmd
 	p.done = make(chan struct{})
 	p.started = time.Now().UTC()
@@ -153,8 +168,10 @@ func (p *supervisor) start() error {
 			_, _ = p.logs.Write([]byte("[agent] Endpoint process exited with an error\n"))
 		}
 	}()
+
 	return nil
 }
+
 func (p *supervisor) verify(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, p.config.ReadyTimeout)
 	defer cancel()
@@ -184,6 +201,7 @@ func (p *supervisor) verify(ctx context.Context) error {
 		}
 	}
 }
+
 func (p *supervisor) stop() error {
 	p.mu.Lock()
 	cmd, done := p.cmd, p.done
@@ -191,6 +209,7 @@ func (p *supervisor) stop() error {
 	if cmd == nil {
 		return nil
 	}
+
 	// Stable 1.1.0 handles Ctrl-C for graceful shutdown, not SIGTERM.
 	_ = cmd.Process.Signal(os.Interrupt)
 	select {
@@ -198,6 +217,7 @@ func (p *supervisor) stop() error {
 		return nil
 	case <-time.After(p.config.StopTimeout):
 	}
+
 	_ = cmd.Process.Kill()
 	select {
 	case <-done:
@@ -206,6 +226,7 @@ func (p *supervisor) stop() error {
 		return errors.New("endpoint process did not stop")
 	}
 }
+
 func (p *supervisor) restart(ctx context.Context) error {
 	if err := p.stop(); err != nil {
 		return err
@@ -222,6 +243,7 @@ func (p *supervisor) restart(ctx context.Context) error {
 	}
 	return nil
 }
+
 func (p *supervisor) reload() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -239,7 +261,15 @@ func (p *supervisor) export(ctx context.Context, user string) (protocol.Export, 
 	out := protocol.Export{Username: user}
 	for _, format := range []string{"toml", "deeplink"} {
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		cmd := exec.CommandContext(ctx, p.config.Binary, filepath.Join(p.config.ConfigDir, "vpn.toml"), filepath.Join(p.config.ConfigDir, "hosts.toml"), "-c", user, "-a", p.config.PublicAddress, "--format", format)
+		cmd := exec.CommandContext(
+			ctx,
+			p.config.Binary,
+			filepath.Join(p.config.ConfigDir, "vpn.toml"),
+			filepath.Join(p.config.ConfigDir, "hosts.toml"),
+			"-c", user,
+			"-a", p.config.PublicAddress,
+			"--format", format,
+		)
 		cmd.Dir = p.config.ConfigDir
 		var stdout limitedBuffer
 		cmd.Stdout = &stdout
@@ -249,6 +279,7 @@ func (p *supervisor) export(ctx context.Context, user string) (protocol.Export, 
 		if err != nil || stdout.overflow {
 			return out, errors.New("client export failed")
 		}
+
 		if format == "toml" {
 			out.TOML = stdout.String()
 		} else {
@@ -261,6 +292,7 @@ func (p *supervisor) export(ctx context.Context, user string) (protocol.Export, 
 			}
 		}
 	}
+
 	if out.TOML == "" || out.DeepLink == "" {
 		return protocol.Export{}, errors.New("endpoint returned an invalid client export")
 	}

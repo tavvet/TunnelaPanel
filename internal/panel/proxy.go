@@ -19,19 +19,24 @@ func parseTrustedProxies(values []string) (trustedProxyPolicy, error) {
 			prefixes = append(prefixes, netip.PrefixFrom(addr, addr.BitLen()))
 			continue
 		}
+
 		prefix, err := netip.ParsePrefix(value)
 		if err != nil {
 			return nil, fmt.Errorf("invalid PANEL_TRUSTED_PROXIES entry %q: expected an IP address or CIDR", value)
 		}
+
 		// Treat IPv4-mapped addresses consistently with ordinary IPv4 peers.
 		if prefix.Addr().Is4In6() {
 			if prefix.Bits() < 96 {
 				return nil, fmt.Errorf("invalid PANEL_TRUSTED_PROXIES entry %q: mapped IPv4 CIDR must have at least 96 prefix bits", value)
 			}
+
 			prefix = netip.PrefixFrom(prefix.Addr().Unmap(), prefix.Bits()-96)
 		}
+
 		prefixes = append(prefixes, prefix.Masked())
 	}
+
 	return prefixes, nil
 }
 
@@ -42,10 +47,12 @@ func (s *Server) remoteIP(r *http.Request) string {
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}
+
 	peer, err := netip.ParseAddr(host)
 	if err != nil {
 		return host
 	}
+
 	peer = peer.Unmap()
 	trusted := false
 	for _, prefix := range s.trustedProxies {
@@ -54,6 +61,7 @@ func (s *Server) remoteIP(r *http.Request) string {
 			break
 		}
 	}
+
 	if trusted {
 		values := r.Header.Values("X-Real-IP")
 		if len(values) == 1 {
@@ -62,5 +70,6 @@ func (s *Server) remoteIP(r *http.Request) string {
 			}
 		}
 	}
+
 	return peer.String()
 }
