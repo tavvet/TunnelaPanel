@@ -30,6 +30,20 @@ configuration, credentials, Git history, and build caches are excluded.
 Copy the release archive to the server; Git is not required there. See the
 [migration and operations runbook](docs/operations.md) before starting Compose.
 An existing service already owns the production TCP port until cutover.
+The first migration is complete; see the [deployment record](docs/deployment-2026-10-06.md).
+
+## Development checks
+
+```sh
+go test -race ./...
+go vet ./...
+```
+
+Tests run a fake endpoint subprocess and temporary local sockets to exercise
+rollback, interrupted transactions, process recovery, password rotation and CSRF.
+The server-side `scripts/smoke-test.py` additionally verifies actual TrustTunnel
+authentication and forwarding; see the runbook before using its staging-only
+user lifecycle option.
 
 ## Components
 

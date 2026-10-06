@@ -127,6 +127,20 @@ starting production and do not run both panels concurrently against the same
 state files. Staged administrative user edits change the copied container
 configuration; they do not change the native installation.
 
+For the initial installation, the scripted check reads the bootstrap admin
+password directly from its protected file. It never prints credentials or
+passes VPN passwords in command arguments:
+
+```sh
+python3 scripts/smoke-test.py --panel-port 18080 --endpoint-port 18443 --exercise-users
+```
+
+This staging-only mode creates, applies, disables and deletes a temporary user,
+checks real authenticated HTTPS forwarding, and compares the existing user's
+export against the native installation. Production smoke checks omit
+`--exercise-users`; they are read-only. These checks use the bootstrap file and
+therefore are intended for initial migration, before changing the admin password.
+
 ```sh
 docker compose -p tunnelapanel-stage -f deploy/compose.yml down
 ```
