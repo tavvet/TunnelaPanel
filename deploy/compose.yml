@@ -1,0 +1,67 @@
+name: tunnelapanel
+
+services:
+  panel:
+    image: tunnelapanel-panel:${PANEL_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: deploy/panel.Dockerfile
+    restart: unless-stopped
+    user: "0:0"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    environment:
+      PANEL_LISTEN: ":8080"
+      PANEL_STATE_DIR: /data/panel
+      PANEL_COOKIE_SECURE: "${PANEL_COOKIE_SECURE:-false}"
+      PANEL_ALLOWED_HOSTS: "${PANEL_ALLOWED_HOSTS:-}"
+      TT_SOCKET: /run/tunnelapanel/control.sock
+    ports:
+      - "127.0.0.1:${PANEL_PORT:-8080}:8080/tcp"
+    volumes:
+      - ../runtime/panel:/data/panel
+      - control:/run/tunnelapanel
+    depends_on:
+      - endpoint
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  endpoint:
+    image: tunnelapanel-endpoint:${PANEL_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: deploy/endpoint.Dockerfile
+    restart: unless-stopped
+    user: "0:0"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    environment:
+      TT_BINARY: /usr/local/bin/trusttunnel_endpoint
+      TT_CONFIG_DIR: /data/config
+      TT_STATE_DIR: /data/state
+      TT_SOCKET: /run/tunnelapanel/control.sock
+      TT_PUBLIC_ADDRESS: "${TT_PUBLIC_ADDRESS:-dman.pancom.pw:443}"
+      TT_METRICS_URL: http://127.0.0.1:1987
+    ports:
+      # TCP only: UDP 443 belongs to the existing family-proxy service.
+      - "${TT_BIND_IP:-0.0.0.0}:${TT_PORT:-443}:8443/tcp"
+    volumes:
+      - ../runtime/config:/data/config
+      - ../runtime/state:/data/state
+      # Mount the whole tree: live/ certificates link into archive/.
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - control:/run/tunnelapanel
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  control:
