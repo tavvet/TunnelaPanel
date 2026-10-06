@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -249,7 +250,12 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request, se session, page, 
 	var err error
 	switch page {
 	case "dashboard":
-		err = s.agent.call(r.Context(), "GET", "/v1/clients", nil, &v.Clients)
+		var users protocol.Users
+		clientsErr := s.agent.call(r.Context(), "GET", "/v1/clients", nil, &v.Clients)
+		usersErr := s.agent.call(r.Context(), "GET", "/v1/users", nil, &users)
+		certificatesErr := s.agent.call(r.Context(), "GET", "/v1/certificates", nil, &v.Certificates)
+		v.Users = users.Users
+		err = errors.Join(clientsErr, usersErr, certificatesErr)
 	case "users":
 		var us protocol.Users
 		err = s.agent.call(r.Context(), "GET", "/v1/users", nil, &us)

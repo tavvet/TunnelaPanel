@@ -147,6 +147,10 @@ func TestAuthenticationCSRFAndSecretRoutes(t *testing.T) {
 		if w.Header().Get("Cache-Control") != "no-store" {
 			t.Fatal("secret page can be cached")
 		}
+		if path == "/" && (!strings.Contains(w.Body.String(), `class="stat-value">1</div>`) ||
+			!strings.Contains(w.Body.String(), `class="certificate-host mono">vpn.example.com</div>`)) {
+			t.Fatal("dashboard omitted configured users or certificates")
+		}
 	}
 	w = request(s, "GET", "/users/qr?username=alice", nil, authCookie)
 	if w.Code != 200 || w.Header().Get("Content-Type") != "image/png" {
