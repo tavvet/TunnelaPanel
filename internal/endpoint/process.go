@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -18,79 +17,16 @@ import (
 	"github.com/tavvet/TunnelaPanel/internal/protocol"
 )
 
-type logRing struct {
-	mu      sync.Mutex
-	lines   []string
-	partial string
-	secrets map[string]bool
-}
-
-var secretField = regexp.MustCompile(`(?i)(password|authorization|token)(\s*[=:]\s*)[^\s,;]+`)
-
-func (r *logRing) redact(s string) string {
-	for secret := range r.secrets {
-		if secret != "" {
-			s = strings.ReplaceAll(s, secret, "[redacted]")
-		}
-	}
-	return secretField.ReplaceAllString(s, "$1$2[redacted]")
-}
-
-func (r *logRing) addSecrets(d document) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.secrets == nil {
-		r.secrets = map[string]bool{}
-	}
-	for _, u := range d.Users {
-		if p, ok := u.Fields["password"].(string); ok && p != "" {
-			r.secrets[p] = true
-		}
-	}
-}
-
-func (r *logRing) Write(p []byte) (int, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.partial += string(p)
-	for {
-		i := strings.IndexByte(r.partial, '\n')
-		if i < 0 {
-			break
-		}
-		line := r.partial[:i]
-		r.partial = r.partial[i+1:]
-		line = r.redact(line)
-		if len(line) > 8192 {
-			line = line[:8192] + " [truncated]"
-		}
-		r.lines = append(r.lines, line)
-		if len(r.lines) > 200 {
-			r.lines = r.lines[len(r.lines)-200:]
-		}
-	}
-	if len(r.partial) > 8192 {
-		r.partial = "[oversized log line omitted]"
-	}
-	return len(p), nil
-}
-
-func (r *logRing) read() protocol.LogResponse {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	out := protocol.LogResponse{Lines: make([]string, len(r.lines))}
-	for i, line := range r.lines {
-		out.Lines[i] = r.redact(line)
-	}
-	return out
-}
-
+// supervisor tracks one child process. Agent.mu serializes lifecycle operations;
+// mu protects identity and status shared with the asynchronous wait goroutine.
 type supervisor struct {
-	mu                 sync.Mutex
-	config             Config
-	listener           string
-	logs               *logRing
-	cmd                *exec.Cmd
+	mu       sync.Mutex
+	config   Config
+	listener string
+	logs     *logRing
+	cmd      *exec.Cmd
+	// done belongs to the most recently started cmd and is closed only by its
+	// wait goroutine, after that goroutine updates process status.
 	done               chan struct{}
 	started            time.Time
 	lastError, version string
@@ -153,6 +89,8 @@ func (p *supervisor) start() error {
 	p.started = time.Now().UTC()
 	p.lastError = ""
 	done := p.done
+	// Capture this process's completion channel so its waiter cannot close a
+	// later process's channel.
 	go func() {
 		err := cmd.Wait()
 		p.mu.Lock()
@@ -172,6 +110,8 @@ func (p *supervisor) start() error {
 	return nil
 }
 
+// verify polls child liveness and requires successful TCP dials before and after
+// StableTime. It does not validate TLS, VPN authentication, or forwarding.
 func (p *supervisor) verify(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, p.config.ReadyTimeout)
 	defer cancel()
@@ -210,6 +150,7 @@ func (p *supervisor) stop() error {
 		return nil
 	}
 
+	// Wait without mu: the child's wait goroutine needs it before closing done.
 	// Stable 1.1.0 handles Ctrl-C for graceful shutdown, not SIGTERM.
 	_ = cmd.Process.Signal(os.Interrupt)
 	select {

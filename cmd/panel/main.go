@@ -13,6 +13,7 @@ import (
 	"github.com/tavvet/TunnelaPanel/internal/panel"
 )
 
+// Release packaging replaces version through the Go linker's -X flag.
 var version = "dev"
 
 func env(key, fallback string) string {
@@ -43,9 +44,11 @@ func main() {
 		Handler:           app,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      90 * time.Second,
-		IdleTimeout:       60 * time.Second,
-		MaxHeaderBytes:    16 << 10,
+		// Allow the agent client's 70-second timeout to finish before the response
+		// deadline; applying settings can include a restart and rollback.
+		WriteTimeout:   90 * time.Second,
+		IdleTimeout:    60 * time.Second,
+		MaxHeaderBytes: 16 << 10,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

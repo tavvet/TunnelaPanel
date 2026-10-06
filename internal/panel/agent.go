@@ -17,6 +17,8 @@ type agentClient struct {
 	http *http.Client
 }
 
+// newAgentClient confines HTTP requests to the configured Unix socket.
+// The URL authority is a placeholder; redirects are never followed.
 func newAgentClient(socket string) *agentClient {
 	return &agentClient{
 		http: &http.Client{

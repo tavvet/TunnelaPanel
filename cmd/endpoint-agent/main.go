@@ -29,6 +29,8 @@ func run() error {
 	if err = agent.Start(ctx); err != nil {
 		return err
 	}
+	// Certbot signals the agent, which validates the replacement certificate and
+	// forwards SIGHUP to TrustTunnel without restarting it or applying the draft.
 	hup := make(chan os.Signal, 1)
 	signal.Notify(hup, syscall.SIGHUP)
 	defer signal.Stop(hup)

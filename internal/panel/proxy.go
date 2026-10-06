@@ -10,6 +10,8 @@ import (
 
 type trustedProxyPolicy []netip.Prefix
 
+// parseTrustedProxies rejects invalid entries rather than silently widening trust.
+// An empty policy keeps all requests tied to their direct peer address.
 func parseTrustedProxies(values []string) (trustedProxyPolicy, error) {
 	var prefixes trustedProxyPolicy
 	for _, value := range values {
@@ -63,6 +65,8 @@ func (s *Server) remoteIP(r *http.Request) string {
 	}
 
 	if trusted {
+		// Accept one plain IP only; repeated, chained, or malformed values fall back
+		// to the peer address used by both rate limiting and the audit log.
 		values := r.Header.Values("X-Real-IP")
 		if len(values) == 1 {
 			if forwarded, err := netip.ParseAddr(values[0]); err == nil && forwarded.Zone() == "" {

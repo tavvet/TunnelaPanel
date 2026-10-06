@@ -2,17 +2,13 @@ package endpoint
 
 import (
 	"context"
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/tavvet/TunnelaPanel/internal/protocol"
@@ -43,6 +39,8 @@ func decodeChange(w http.ResponseWriter, r *http.Request) (protocol.UserChange, 
 	return c, nil
 }
 
+// Handler exposes the private control API. Serve restricts access through Unix
+// socket permissions; the handler itself does not authenticate HTTP clients.
 func (a *Agent) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/healthz" && r.Method == http.MethodGet {
@@ -163,6 +161,8 @@ func (a *Agent) Handler() http.Handler {
 	})
 }
 
+// Serve runs the Unix-socket API and crash-recovery monitor until ctx is canceled.
+// Start must be called first; Close shuts down the child after serving ends.
 func (a *Agent) Serve(ctx context.Context) error {
 	monitorCtx, stopMonitor := context.WithCancel(ctx)
 	defer stopMonitor()
@@ -226,91 +226,4 @@ func (a *Agent) Serve(ctx context.Context) error {
 		return nil
 	}
 	return err
-}
-
-func (a *Agent) clients(ctx context.Context) ([]protocol.ClientMetric, error) {
-	u, err := url.Parse(a.config.MetricsURL)
-	if err != nil || u.Scheme != "http" || u.User != nil {
-		return nil, errors.New("invalid private metrics URL")
-	}
-	ip := net.ParseIP(u.Hostname())
-	if ip == nil || !ip.IsLoopback() {
-		return nil, errors.New("metrics URL must use a loopback IP address")
-	}
-	u.Path = strings.TrimRight(u.Path, "/") + "/clients"
-	u.RawQuery = ""
-	u.Fragment = ""
-
-	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
-	if err != nil {
-		return nil, errors.New("cannot create metrics request")
-	}
-	client := http.Client{
-		Timeout: 3 * time.Second,
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-		Transport: &http.Transport{
-			Proxy:             nil,
-			DisableKeepAlives: true,
-		},
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, errors.New("endpoint metrics are unavailable")
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return nil, errors.New("endpoint metrics returned an error")
-	}
-
-	var metrics []protocol.ClientMetric
-	if json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(&metrics) != nil {
-		return nil, errors.New("invalid endpoint metrics")
-	}
-	if metrics == nil {
-		metrics = []protocol.ClientMetric{}
-	}
-	return metrics, nil
-}
-
-func (a *Agent) certificates() ([]protocol.Certificate, error) {
-	doc, _, err := readTOML(filepath.Join(a.config.ConfigDir, "hosts.toml"))
-	if err != nil {
-		return nil, err
-	}
-	out := []protocol.Certificate{}
-	for _, key := range []string{"main_hosts", "fallback_hosts"} {
-		hosts, _ := doc[key].([]any)
-		for _, entry := range hosts {
-			h, ok := entry.(map[string]any)
-			if !ok {
-				continue
-			}
-			name, _ := h["hostname"].(string)
-			path, _ := h["cert_chain_path"].(string)
-			item := protocol.Certificate{Hostname: name}
-			if !filepath.IsAbs(path) {
-				path = filepath.Join(a.config.ConfigDir, path)
-			}
-			b, err := os.ReadFile(path)
-			if err != nil {
-				item.Error = "cannot read certificate"
-			} else {
-				block, _ := pem.Decode(b)
-				if block == nil {
-					item.Error = "invalid certificate PEM"
-				} else {
-					cert, err := x509.ParseCertificate(block.Bytes)
-					if err != nil {
-						item.Error = "invalid certificate"
-					} else {
-						item.NotAfter = cert.NotAfter
-					}
-				}
-			}
-			out = append(out, item)
-		}
-	}
-	return out, nil
 }

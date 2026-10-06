@@ -11,11 +11,25 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
+// Config defines the executable, persistent paths, and private control endpoints.
+// New requires absolute filesystem paths and a public address with an explicit port.
 type Config struct {
-	Binary, ConfigDir, StateDir, Socket, PublicAddress, MetricsURL string
-	ReadyTimeout, StableTime, StopTimeout                          time.Duration
+	Binary    string
+	ConfigDir string
+	StateDir  string
+	Socket    string
+
+	// PublicAddress is exported to clients and can differ from the local listener.
+	PublicAddress string
+	// MetricsURL must point to an HTTP endpoint on a loopback IP address.
+	MetricsURL string
+
+	ReadyTimeout time.Duration
+	StableTime   time.Duration
+	StopTimeout  time.Duration
 }
 
+// ConfigFromEnv reads TT_* settings and supplies defaults for optional values.
 func ConfigFromEnv() Config {
 	env := func(k, d string) string {
 		if v := os.Getenv(k); v != "" {

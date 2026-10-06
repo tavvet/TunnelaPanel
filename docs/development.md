@@ -16,11 +16,28 @@ Use **Go 1.25 or newer**, as required by `go.mod`. HTML, CSS and JavaScript are 
 
 The panel calls the endpoint agent over a Unix socket in a shared volume. The agent controls its own TrustTunnel child process; neither container receives the Docker socket. Native TOML configuration and atomic JSON state persist under `runtime/`. This single-server, single-administrator design has no separate database service. See [configuration](./configuration.md) and [operations](./operations.md).
 
+## Reading and editing the Go code
+
+Start with `cmd/panel/main.go` and `cmd/endpoint-agent/main.go` for startup and shutdown. Within each package, files separate these responsibilities:
+
+| Files | Responsibility |
+| --- | --- |
+| `panel/server.go`, `panel/middleware.go`, `panel/audit.go` | HTTP routes, request protection and audit logging |
+| `panel/auth.go`, `panel/auth_handlers.go` | Credentials, sessions and login/password handlers |
+| `panel/pages.go`, `panel/actions.go`, `panel/templates.go` | Page data, form actions and HTML rendering |
+| `endpoint/agent.go`, `endpoint/apply.go` | Process lifecycle and configuration transactions |
+| `endpoint/store.go`, `endpoint/credentials.go` | Applied/draft state and TOML encoding |
+| `endpoint/process.go`, `endpoint/logs.go` | Child process supervision and log redaction |
+| `endpoint/metrics.go`, `endpoint/certificates.go` | Private metrics, certificate inspection and TLS reload |
+
+Paths in this table are relative to `internal/`. Keep Go comments in English and explain constraints, ownership and ordering where they are not obvious. Expand multi-step functions and large literals over several lines before running `gofmt`; the formatter does not wrap long expressions automatically. Comments beside apply/recovery and authentication describe the guarantees a refactor must preserve.
+
 ## Checks
 
 Run from the repository root:
 
 ```sh
+gofmt -w cmd internal
 go test -race ./...
 go vet ./...
 python3 scripts/test-certbot-hook.py

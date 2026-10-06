@@ -32,6 +32,8 @@ type attempt struct {
 	Until time.Time
 }
 
+// auth keeps credentials on disk, but sessions and rate limits only in memory.
+// The mutex also serializes credential checks with password changes.
 type auth struct {
 	mu       sync.Mutex
 	file     authFile
@@ -58,6 +60,8 @@ func passwordHash(password, salt string) (string, error) {
 	return base64.RawStdEncoding.EncodeToString(hash), nil
 }
 
+// atomicJSON writes a private temporary file beside the destination, then replaces it.
+// Syncing the file before rename and the directory afterward persists both steps.
 func atomicJSON(path string, value any) error {
 	b, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
@@ -133,6 +137,8 @@ func newAuth(dir string) (*auth, error) {
 		return nil, err
 	}
 
+	// Reuse a bootstrap password left by an interrupted first start so the saved
+	// password still matches the credentials that are about to be committed.
 	passwordPath := filepath.Join(dir, "bootstrap-password")
 	passwordBytes, err := os.ReadFile(passwordPath)
 	if errors.Is(err, os.ErrNotExist) {
@@ -177,7 +183,8 @@ func (a *auth) checkLocked(username, password string) bool {
 	return err == nil && subtle.ConstantTimeCompare([]byte(hash), []byte(a.file.Hash)) == 1 && username == a.file.Username
 }
 
-// Authentication and session creation must use the same credential generation.
+// authenticate holds the lock across the credential check and session creation.
+// A concurrent password change cannot leave a new session using old credentials.
 func (a *auth) authenticate(username, password string, now time.Time) (string, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -239,6 +246,7 @@ func (a *auth) createSessionLocked(now time.Time) (string, session) {
 		a.sessions = make(map[string]session)
 	}
 
+	// The form token is independent of the session ID sent in the HttpOnly cookie.
 	id := randomToken()
 	s := session{
 		CSRF:    randomToken(),
@@ -292,6 +300,7 @@ func (a *auth) changePassword(current, password string) error {
 		return errors.New("Не удалось обновить пароль.")
 	}
 
+	// Persist credentials before publishing them in memory and invalidating sessions.
 	if err := atomicJSON(filepath.Join(a.dir, "auth.json"), f); err != nil {
 		return errors.New("Не удалось сохранить пароль.")
 	}
