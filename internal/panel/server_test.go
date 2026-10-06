@@ -178,6 +178,71 @@ func TestHostAndOriginProtection(t *testing.T) {
 	}
 }
 
+func TestBrowserFormOriginPolicy(t *testing.T) {
+	s, calls := newTestPanel(t)
+	page := request(s, "GET", "/login", nil)
+	if page.Header().Get("Referrer-Policy") != "same-origin" ||
+		!strings.Contains(page.Body.String(), `<meta name="referrer" content="same-origin">`) ||
+		strings.Contains(page.Body.String(), `content="no-referrer"`) {
+		t.Fatal("form navigation must preserve Origin in both HTTP and HTML policy")
+	}
+	var loginCookie *http.Cookie
+	for _, cookie := range page.Result().Cookies() {
+		if cookie.Name == "tp_login" {
+			loginCookie = cookie
+		}
+	}
+	if loginCookie == nil {
+		t.Fatal("missing login cookie")
+	}
+	password, err := os.ReadFile(filepath.Join(s.config.StateDir, "bootstrap-password"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	post := func(path, origin string, fields url.Values, cookie *http.Cookie) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "http://localhost:8080"+path, strings.NewReader(fields.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.Header.Set("Origin", origin)
+		r.AddCookie(cookie)
+		w := httptest.NewRecorder()
+		s.ServeHTTP(w, r)
+		return w
+	}
+	login := post("/login", "http://localhost:8080", url.Values{
+		"username": {"admin"}, "password": {string(password)}, "csrf": {loginCookie.Value},
+	}, loginCookie)
+	if login.Code != http.StatusSeeOther {
+		t.Fatalf("browser login failed: %d", login.Code)
+	}
+	var sessionCookie *http.Cookie
+	for _, cookie := range login.Result().Cookies() {
+		if cookie.Name == "tp_session" {
+			sessionCookie = cookie
+		}
+	}
+	if sessionCookie == nil {
+		t.Fatal("missing session cookie")
+	}
+	se, ok := s.auth.lookup(sessionCookie.Value, time.Now())
+	if !ok {
+		t.Fatal("missing session")
+	}
+	for _, tc := range []struct{ origin, token string }{
+		{"null", se.CSRF}, {"https://evil.example", se.CSRF},
+		{"http://localhost:8081", se.CSRF}, {"http://localhost:8080", "invalid"},
+	} {
+		before := calls.Load()
+		w := post("/apply", tc.origin, url.Values{"csrf": {tc.token}}, sessionCookie)
+		if w.Code != http.StatusForbidden || calls.Load() != before {
+			t.Fatalf("unsafe form reached endpoint: origin=%q status=%d", tc.origin, w.Code)
+		}
+	}
+	w := post("/apply", "http://localhost:8080", url.Values{"csrf": {se.CSRF}}, sessionCookie)
+	if w.Code != http.StatusSeeOther || calls.Load() != 1 {
+		t.Fatal("same-origin form was rejected")
+	}
+}
+
 func TestPasswordPersistenceInvalidationAndRateLimit(t *testing.T) {
 	dir := t.TempDir()
 	a, err := newAuth(dir)

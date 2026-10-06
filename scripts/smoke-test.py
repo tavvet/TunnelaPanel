@@ -51,15 +51,20 @@ def main():
     def post(path, fields):
         page = get("/users").decode()
         fields = dict(fields, csrf=csrf(page))
-        with opener.open(base + path, urllib.parse.urlencode(fields).encode(), timeout=75) as response:
+        request = urllib.request.Request(base + path, urllib.parse.urlencode(fields).encode(), headers={"Origin": base})
+        with opener.open(request, timeout=75) as response:
             page = response.read().decode()
             assert 'class="notice notice-error"' not in page, "Panel returned an action error: " + path
             return page
 
-    login = get("/login").decode()
+    with opener.open(base + "/login", timeout=75) as response:
+        assert response.headers.get("Referrer-Policy") == "same-origin", "Form POST origin is suppressed"
+        login = response.read().decode()
+    assert '<meta name="referrer" content="same-origin">' in login, "HTML overrides form origin policy"
     initial_password = (root / "runtime/panel/bootstrap-password").read_text()
     fields = {"username": "admin", "password": initial_password, "csrf": csrf(login)}
-    with opener.open(base + "/login", urllib.parse.urlencode(fields).encode(), timeout=75) as response:
+    request = urllib.request.Request(base + "/login", urllib.parse.urlencode(fields).encode(), headers={"Origin": base})
+    with opener.open(request, timeout=75) as response:
         assert response.url.rstrip("/") == base, "Login did not redirect to dashboard"
     print("OK admin login and CSRF session")
 
