@@ -1,0 +1,33 @@
+{{define "dashboard"}}
+{{template "header" .}}
+<div class="page-heading"><div><span class="eyebrow">Состояние сервера</span><h1>Обзор</h1><p>Всё, что нужно знать о вашем TrustTunnel.</p></div><a class="button button-secondary" href="/">Обновить данные <span aria-hidden="true">↻</span></a></div>
+
+<section class="stat-grid" aria-label="Сводка">
+  <article class="stat-card"><span class="stat-label">TrustTunnel</span><div class="stat-value status-value"><span class="status-dot{{if .Status}}{{if .Status.Running}} is-online{{end}}{{end}}"></span>{{if .Status}}{{if .Status.Running}}Работает{{else}}Остановлен{{end}}{{else}}Недоступен{{end}}</div><p>{{if .Status}}{{if .Status.Running}}В работе {{uptime .Status.StartedAt}}{{else}}Сервис не принимает подключения{{end}}{{else}}Не удалось получить состояние{{end}}</p></article>
+  <article class="stat-card"><span class="stat-label">Пользователи</span><div class="stat-value">{{if .AgentError}}—{{else}}{{len .Users}}{{end}}</div><p>Учётные записи VPN <a href="/users" aria-label="Управление пользователями">Управлять <span aria-hidden="true">↗</span></a></p></article>
+  <article class="stat-card"><span class="stat-label">Публичный адрес</span><div class="stat-value stat-address">{{if .Status}}{{if .Status.PublicAddress}}{{.Status.PublicAddress}}{{else}}Не задан{{end}}{{else}}—{{end}}</div><p>Адрес подключения клиентов</p></article>
+</section>
+
+<div class="dashboard-grid">
+  <section class="card server-card" aria-labelledby="service-heading">
+    <div class="card-heading"><div><h2 id="service-heading">VPN-сервис</h2><p>Процесс и управление подключениями</p></div><span class="small-label">ENDPOINT</span></div>
+    {{if .Status}}
+    <dl class="detail-list"><div><dt>Версия TrustTunnel</dt><dd class="mono">{{if .Status.Version}}{{.Status.Version}}{{else}}Не определена{{end}}</dd></div><div><dt>Последний запуск</dt><dd>{{if .Status.StartedAt.IsZero}}—{{else}}{{datetime .Status.StartedAt}}{{end}}</dd></div><div><dt>Настройки</dt><dd>{{if .Status.Pending}}<span class="text-amber">Ожидают применения</span>{{else}}<span class="text-teal">Применены</span>{{end}}</dd></div></dl>
+    {{if .Status.LastError}}<div class="inline-error"><strong>Последняя ошибка</strong><p>{{.Status.LastError}}</p></div>{{end}}
+    <div class="card-action"><form action="/restart" method="post" data-confirm="Перезапустить TrustTunnel? Текущие VPN-соединения будут прерваны. Неприменённые изменения останутся в черновике."><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="button button-secondary" type="submit">Перезапустить сервис</button></form><p>Текущие VPN-соединения будут прерваны.</p></div>
+    {{else}}<div class="empty-state compact"><span class="empty-symbol" aria-hidden="true">↯</span><h3>Состояние неизвестно</h3><p>Данные появятся после восстановления связи с сервисом.</p></div>{{end}}
+  </section>
+
+  <section class="card" aria-labelledby="certificates-heading">
+    <div class="card-heading"><div><h2 id="certificates-heading">Сертификаты TLS</h2><p>Защищённое соединение с сервером</p></div><svg class="heading-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m12 3 8 3v6c0 5-4 8-8 10-4-2-8-5-8-10V6l8-3Z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg></div>
+    {{if .Certificates}}<ul class="certificate-list">{{range .Certificates}}<li><div class="certificate-host mono">{{.Hostname}}</div>{{if .Error}}<p class="text-red">{{.Error}}</p>{{else}}<div class="certificate-meta"><span>До {{datetime .NotAfter}}</span><span class="small-label">{{remaining .NotAfter}}</span></div>{{end}}</li>{{end}}</ul>{{else}}<div class="empty-state compact"><h3>Нет данных о сертификатах</h3><p>Сертификаты появятся после загрузки конфигурации сервера.</p></div>{{end}}
+    <div class="card-action"><form action="/tls/reload" method="post"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="button button-secondary" type="submit"{{if not .Status}} disabled{{end}}>Перечитать TLS</button></form><p>Загрузить обновлённые сертификаты с диска.</p></div>
+  </section>
+</div>
+
+<section class="card" aria-labelledby="connections-heading">
+  <div class="card-heading"><div><h2 id="connections-heading">Подключения и трафик</h2><p>Счётчики трафика с последнего запуска TrustTunnel.</p></div><span class="small-label">СНИМОК СТАТИСТИКИ</span></div>
+  {{if .Clients}}<div class="table-scroll"><table><thead><tr><th scope="col">Пользователь</th><th scope="col">IP-адрес</th><th scope="col" class="numeric">Сессии</th><th scope="col" class="numeric">Входящий</th><th scope="col" class="numeric">Исходящий</th></tr></thead><tbody>{{range .Clients}}<tr><td class="cell-strong">{{.Username}}</td><td class="mono muted">{{if .IP}}{{.IP}}{{else}}—{{end}}</td><td class="numeric">{{.Sessions}}</td><td class="numeric mono">{{bytes .Inbound}}</td><td class="numeric mono">{{bytes .Outbound}}</td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty-state"><span class="empty-symbol" aria-hidden="true">↔</span><h3>Пока нет данных о подключениях</h3><p>Здесь появится статистика пользователей, когда сервер её предоставит.</p></div>{{end}}
+</section>
+{{template "footer" .}}
+{{end}}

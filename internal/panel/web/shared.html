@@ -1,0 +1,73 @@
+{{define "head"}}
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="referrer" content="no-referrer">
+  <title>{{.Title}} · Tunnela</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+{{end}}
+
+{{define "brand"}}
+<span class="brand-mark" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M5 5.5h14M12 6v13M7 10v7M17 10v7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span>
+<span class="brand-word">Tunnela<span class="brand-subtitle">TrustTunnel Panel</span></span>
+{{end}}
+
+{{define "header"}}
+<!doctype html>
+<html lang="ru">
+{{template "head" .}}
+<body>
+  <a class="skip-link" href="#main">Перейти к содержимому</a>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="/" aria-label="Tunnela — обзор сервера">{{template "brand" .}}</a>
+      <div class="nav-label">Управление</div>
+      <nav class="navigation" aria-label="Основная навигация">
+        <a href="/" class="nav-item{{if eq .Page "dashboard"}} is-active{{end}}"{{if eq .Page "dashboard"}} aria-current="page"{{end}}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="3" width="5" height="5" rx="1.2"/><rect x="12" y="3" width="5" height="5" rx="1.2"/><rect x="3" y="12" width="5" height="5" rx="1.2"/><rect x="12" y="12" width="5" height="5" rx="1.2"/></svg>Обзор</a>
+        <a href="/users" class="nav-item{{if or (eq .Page "users") (eq .Page "export")}} is-active{{end}}"{{if eq .Page "users"}} aria-current="page"{{end}}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="8" cy="6.2" r="3"/><path d="M2.5 17v-1.5a5.5 5.5 0 0 1 11 0V17M14 3.5a3 3 0 0 1 0 5.5M17.5 17v-1.5a5 5 0 0 0-2.3-4.2"/></svg>Пользователи</a>
+        <a href="/logs" class="nav-item{{if eq .Page "logs"}} is-active{{end}}"{{if eq .Page "logs"}} aria-current="page"{{end}}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="2.5" width="14" height="15" rx="2"/><path d="M6.5 6.5h7M6.5 10h7M6.5 13.5h4"/></svg>Журнал</a>
+        <a href="/settings" class="nav-item{{if eq .Page "settings"}} is-active{{end}}"{{if eq .Page "settings"}} aria-current="page"{{end}}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 5h14M3 15h14M3 10h14"/><circle cx="7" cy="5" r="2"/><circle cx="13" cy="10" r="2"/><circle cx="8" cy="15" r="2"/></svg>Настройки</a>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="sidebar-server"><span class="status-dot{{if .Status}}{{if .Status.Running}} is-online{{end}}{{end}}"></span><span>{{if .Status}}{{if .Status.Running}}TrustTunnel работает{{else}}TrustTunnel остановлен{{end}}{{else}}Статус недоступен{{end}}</span></div>
+        <div class="account">
+          <span class="account-avatar" aria-hidden="true">A</span>
+          <span class="account-name">{{.Username}}<small>Администратор</small></span>
+          <form action="/logout" method="post"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="icon-button" type="submit" aria-label="Выйти из панели" title="Выйти"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M8 3H4.5A1.5 1.5 0 0 0 3 4.5v11A1.5 1.5 0 0 0 4.5 17H8M8 10h9M13 6l4 4-4 4"/></svg></button></form>
+        </div>
+      </div>
+    </aside>
+    <div class="workspace">
+      <div class="topbar"><span>Ваш VPN-сервер</span><span class="topbar-tag">Локальное управление</span></div>
+      <main id="main" class="main-content">
+        {{template "notice" .}}
+        {{if .Status}}{{if .Status.Pending}}
+        <section class="pending-banner" aria-labelledby="pending-title">
+          <div><span class="eyebrow">Изменения готовы</span><h2 id="pending-title">Осталось применить настройки</h2><p>Изменения пользователей ещё не действуют. При применении TrustTunnel перезапустится и прервёт текущие VPN-соединения.</p></div>
+          <div class="button-row">
+            <form action="/apply" method="post" data-confirm="Применить изменения? TrustTunnel перезапустится, текущие VPN-соединения будут прерваны."><input type="hidden" name="csrf" value="{{$.CSRF}}"><button type="submit" class="button button-primary">Применить</button></form>
+            <form action="/discard" method="post" data-confirm="Отменить все неприменённые изменения пользователей?"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button type="submit" class="button button-secondary">Отменить изменения</button></form>
+          </div>
+        </section>
+        {{end}}{{end}}
+{{end}}
+
+{{define "notice"}}
+{{if .Error}}<div class="notice notice-error" role="alert"><span class="notice-symbol" aria-hidden="true">!</span><div>{{.Error}}</div></div>{{end}}
+{{if .Flash}}<div class="notice notice-success" role="status"><span class="notice-symbol" aria-hidden="true">✓</span><div>{{.Flash}}</div></div>{{end}}
+{{if .AgentError}}<div class="notice notice-error" role="alert"><span class="notice-symbol" aria-hidden="true">!</span><div><strong>Нет связи с TrustTunnel</strong><p>{{.AgentError}}</p></div></div>{{end}}
+{{end}}
+
+{{define "footer"}}
+      </main>
+      <footer class="page-footer"><span>Tunnela <span class="footer-version">{{if .Version}}{{.Version}}{{else}}dev{{end}}</span></span><span>Панель управления TrustTunnel</span></footer>
+    </div>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>
+{{end}}
