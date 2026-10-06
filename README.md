@@ -7,7 +7,8 @@ is an existing TrustTunnel 1.1.0 installation on Ubuntu 24.04.
 The panel and endpoint supervisor run in separate Docker Compose containers.
 They communicate over a Unix socket in a shared volume. The supervisor controls
 only its TrustTunnel child process; neither container mounts the Docker socket.
-The panel binds to server loopback and is accessed over SSH.
+The panel binds to server loopback. An optional nginx container provides HTTPS
+at `https://dman.pancom.pw:8443` using the existing Certbot certificate.
 
 Panel data and staged user changes are stored as atomic JSON files on persistent
 bind mounts. This single-admin MVP does not need a database service. TrustTunnel
@@ -73,6 +74,12 @@ under `runtime/` beside `deploy/`; they are not part of a release archive.
 | `PANEL_PORT` | `8080` | Web panel port on server loopback |
 | `PANEL_COOKIE_SECURE` | `false` | Enable only when browser access uses HTTPS |
 | `PANEL_ALLOWED_HOSTS` | empty | Additional allowed hostnames for an optional reverse proxy |
+| `PANEL_TRUSTED_PROXIES` | empty | IP/CIDR allowlist for nginx's overwritten `X-Real-IP` |
+| `COMPOSE_PROFILES` | empty | Set `https` to enable the TLS proxy |
+| `PANEL_HTTPS_PORT` | `8443` | Public HTTPS panel port |
+| `PANEL_HTTPS_BIND_IP` | `0.0.0.0` | Host bind address for the TLS proxy |
+| `PANEL_PROXY_SUBNET` | `172.30.80.0/29` | Dedicated proxy Docker subnet; avoid existing networks |
+| `PANEL_PROXY_IP` | `172.30.80.3` | Fixed proxy IP; also set this in `PANEL_TRUSTED_PROXIES` |
 | `TT_PUBLIC_ADDRESS` | `dman.pancom.pw:443` | Address included in connection exports |
 | `TT_BIND_IP` | `0.0.0.0` | Host bind address for TrustTunnel TCP |
 | `TT_PORT` | `443` | Host TCP port mapped to container port 8443 |

@@ -16,6 +16,7 @@ services:
       PANEL_STATE_DIR: /data/panel
       PANEL_COOKIE_SECURE: "${PANEL_COOKIE_SECURE:-false}"
       PANEL_ALLOWED_HOSTS: "${PANEL_ALLOWED_HOSTS:-}"
+      PANEL_TRUSTED_PROXIES: "${PANEL_TRUSTED_PROXIES:-}"
       TT_SOCKET: /run/tunnelapanel/control.sock
     ports:
       - "127.0.0.1:${PANEL_PORT:-8080}:8080/tcp"
@@ -24,6 +25,40 @@ services:
       - control:/run/tunnelapanel
     depends_on:
       - endpoint
+    networks:
+      - default
+      - panel_proxy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  https:
+    profiles: [https]
+    # Official stable image, pinned to the verified multi-platform manifest.
+    image: nginx:stable-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94
+    entrypoint: [nginx, -g, "daemon off;"]
+    restart: unless-stopped
+    user: "0:0"
+    cap_drop: [ALL]
+    # Master reads root-only TLS keys; workers drop to nginx and are signalled
+    # on graceful reload. CHOWN prepares worker-owned temporary directories.
+    cap_add: [SETUID, SETGID, KILL, CHOWN]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777,noexec,nosuid
+    ports:
+      - "${PANEL_HTTPS_BIND_IP:-0.0.0.0}:${PANEL_HTTPS_PORT:-8443}:8443/tcp"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    networks:
+      panel_proxy:
+        ipv4_address: "${PANEL_PROXY_IP:-172.30.80.3}"
+    depends_on:
+      - panel
     logging:
       driver: json-file
       options:
@@ -65,3 +100,9 @@ services:
 
 volumes:
   control:
+
+networks:
+  panel_proxy:
+    ipam:
+      config:
+        - subnet: "${PANEL_PROXY_SUBNET:-172.30.80.0/29}"

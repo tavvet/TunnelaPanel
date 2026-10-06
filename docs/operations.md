@@ -1,8 +1,8 @@
 # Migration and operations
 
 This runbook describes the initial installation on `root@82.40.58.67` and later
-release updates. Production TrustTunnel is currently native under
-`/opt/trusttunnel`; the new stack lives under `/opt/tunnelapanel`.
+release updates. Production now runs under `/opt/tunnelapanel`. The original
+native installation under `/opt/trusttunnel` is retained for rollback.
 
 ## Existing services and constraints
 
@@ -12,12 +12,16 @@ release updates. Production TrustTunnel is currently native under
 | family-proxy | UDP 443 | Leave running and unchanged |
 | Amnezia | UDP 47222 | Leave running and unchanged |
 | TunnelaPanel | Loopback TCP 8080 | Access through SSH |
+| Optional panel HTTPS proxy | TCP 8443 | Reuse the existing certificate |
 
 TrustTunnel uses HTTP/1 and HTTP/2. Do not enable QUIC or publish UDP 443 in this
 deployment. Container port 8443 avoids privileged-port capabilities. Both
 containers run as UID 0 with all Linux capabilities dropped, no-new-privileges,
 and a read-only root filesystem. They share a mode-0600 control socket. Only the
-endpoint has access to endpoint configuration and certificates.
+endpoint has access to endpoint configuration. The optional nginx proxy also
+mounts certificates read-only: its root master reads private keys, while workers
+run as `nginx`. It uses SETUID, SETGID and KILL to manage those workers, CHOWN to
+prepare their temporary directories, and temporary storage in a bounded tmpfs.
 
 ## Prepare a release
 
@@ -105,7 +109,9 @@ configuration. The same Compose file can be used as follows while production
 continues to serve TCP 443:
 
 ```sh
-TT_BIND_IP=127.0.0.1 TT_PORT=18443 PANEL_PORT=18080 \
+COMPOSE_PROFILES= PANEL_COOKIE_SECURE=false PANEL_TRUSTED_PROXIES= \
+  PANEL_PROXY_SUBNET=172.30.81.0/29 PANEL_PROXY_IP=172.30.81.3 \
+  TT_BIND_IP=127.0.0.1 TT_PORT=18443 PANEL_PORT=18080 \
   docker compose -p tunnelapanel-stage -f deploy/compose.yml up -d
 ```
 
@@ -163,7 +169,7 @@ After the staged connection check passes:
 Existing client credentials, TLS hostname, public address and TCP port are
 preserved. Clients will reconnect during the brief service interruption.
 
-## Panel access
+## Panel access over SSH (initial default)
 
 ```sh
 ssh -N -L 8080:127.0.0.1:8080 root@82.40.58.67
@@ -181,6 +187,60 @@ the panel. Add the proxy's public hostname to `PANEL_ALLOWED_HOSTS`; it accepts 
 comma-separated list without scheme or port. Keep the panel loopback binding
 unless a separate access design is implemented.
 
+## HTTPS on the existing domain
+
+The selected public address is `https://dman.pancom.pw:8443`. TrustTunnel keeps
+TCP 443, family-proxy keeps UDP 443, and Certbot's existing standalone HTTP-01
+challenge keeps port 80. No DNS change or extra certificate is required.
+
+Back up `deploy/.env`, Compose/config files and the installed Certbot hook before
+enabling HTTPS. Ensure TCP 8443 is free and subnet `172.30.80.0/29` does not overlap
+existing Docker/VPN routes. In `deploy/.env`, set:
+
+```ini
+COMPOSE_PROFILES=https
+PANEL_COOKIE_SECURE=true
+PANEL_ALLOWED_HOSTS=dman.pancom.pw
+PANEL_TRUSTED_PROXIES=172.30.80.3
+PANEL_PROXY_SUBNET=172.30.80.0/29
+PANEL_PROXY_IP=172.30.80.3
+```
+
+Then, with the release unpacked and the panel image built:
+
+```sh
+docker compose -f deploy/compose.yml up -d --no-deps panel
+docker compose -f deploy/compose.yml run --rm --no-deps https -t
+docker compose -f deploy/compose.yml up -d --no-deps https
+```
+
+Only the panel is restarted. The proxy has a separate network, a fixed trusted
+source IP and a pinned official nginx image. It preserves `Host` including the
+port and overwrites forwarding headers; only the configured proxy IP may supply
+the client address used for login rate limits and audit records. Its Docker DNS
+lookup refreshes after panel container replacement. For another domain, update
+`server_name` and certificate paths in `deploy/nginx.conf` as well as the allowed
+host and Certbot hook lineage.
+
+Use the same administrator credentials at the new HTTPS address. Browser
+sessions are in memory, so a panel restart requires signing in again. Secure
+cookies are now enabled: use the HTTPS address for browser administration.
+Loopback HTTP remains available for health checks; SSH-only HTTP login can be
+restored by stopping the HTTPS proxy, clearing `COMPOSE_PROFILES` and setting
+`PANEL_COOKIE_SECURE=false` before recreating the panel.
+
+Validate public TLS, login and Secure cookies, and confirm existing VPN traffic
+still works. If the bootstrap password file still exists, the read-only check is:
+
+```sh
+python3 scripts/smoke-test.py --panel-port 8080 --endpoint-port 443 \
+  --panel-url https://dman.pancom.pw:8443
+```
+
+To roll back HTTPS only, stop `https`, restore the saved `.env` and hook, then
+recreate `panel` with `--no-deps`. Leave the endpoint running. A full Compose
+`down` also stops TrustTunnel and is unnecessary for a panel-only change.
+
 ## Certificate renewal
 
 Keep the existing Certbot certificate, timer and challenge method. The supplied
@@ -189,7 +249,9 @@ production Compose endpoint is running, it sends HUP to the supervisor, which
 forwards it to TrustTunnel for TLS-only reload. Otherwise it invokes
 `systemctl try-restart trusttunnel`, which restarts an active native service
 without starting an intentionally stopped one. Docker inspection errors make the
-hook fail visibly.
+hook fail visibly. If the optional `https` service is running, the hook also
+checks `nginx -t` and sends HUP for a graceful certificate reload. Both consumers
+are attempted even if one reload fails; any failure returns a nonzero status.
 
 The hook ignores renewals for other lineages. Its default lineage is
 `/etc/letsencrypt/live/dman.pancom.pw`; edit the installed default if the certificate
@@ -208,7 +270,7 @@ RENEWED_LINEAGE=/etc/letsencrypt/live/dman.pancom.pw \
   /etc/letsencrypt/renewal-hooks/deploy/trusttunnel.sh
 ```
 
-Inspect endpoint logs and the certificate served by a fresh TLS connection after
+Inspect endpoint/proxy logs and the certificates served by fresh TLS connections after
 the manual hook invocation. User changes still require an endpoint restart; HUP
 reloads only TLS settings. A renewal dry-run may exercise ACME challenges;
 preserve the existing challenge configuration and other port owners.

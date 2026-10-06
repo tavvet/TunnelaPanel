@@ -18,13 +18,18 @@ import urllib.request
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--panel-port", type=int, required=True)
+    parser.add_argument("--panel-url", help="HTTPS panel origin instead of loopback HTTP, e.g. https://dman.pancom.pw:8443")
     parser.add_argument("--endpoint-port", type=int, required=True)
     parser.add_argument("--root", type=Path, default=Path("/opt/tunnelapanel"))
     parser.add_argument("--native", type=Path, default=Path("/opt/trusttunnel"))
     parser.add_argument("--exercise-users", action="store_true", help="Create/apply/disable/delete a temporary user on staging only")
     args = parser.parse_args()
-    if args.exercise_users and (args.endpoint_port == 443 or args.panel_port == 8080):
+    if args.exercise_users and (args.endpoint_port == 443 or args.panel_port == 8080 or args.panel_url):
         raise SystemExit("User lifecycle checks must use staging ports.")
+    if args.panel_url:
+        parsed = urllib.parse.urlsplit(args.panel_url)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in ("", "/"):
+            raise SystemExit("--panel-url must be an HTTPS origin without credentials, path, query or fragment.")
     root = args.root
     original = tomllib.loads((args.native / "credentials.toml").read_text())
     user = original["client"][0]
@@ -35,8 +40,9 @@ def main():
          "-a", hostname + ":443", "--format", "toml"], cwd=args.native, capture_output=True, text=True, check=True,
     ).stdout
     baseline = tomllib.loads(baseline)
-    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
-    base = "http://127.0.0.1:" + str(args.panel_port)
+    cookies = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookies))
+    base = args.panel_url.rstrip("/") if args.panel_url else "http://127.0.0.1:" + str(args.panel_port)
 
     def get(path):
         with opener.open(base + path, timeout=75) as response:
@@ -66,6 +72,9 @@ def main():
     request = urllib.request.Request(base + "/login", urllib.parse.urlencode(fields).encode(), headers={"Origin": base})
     with opener.open(request, timeout=75) as response:
         assert response.url.rstrip("/") == base, "Login did not redirect to dashboard"
+    if args.panel_url:
+        assert cookies and all(cookie.secure for cookie in cookies), "HTTPS login cookies must be Secure"
+        print("OK verified HTTPS certificate and Secure cookies")
     print("OK admin login and CSRF session")
 
     def export(username):

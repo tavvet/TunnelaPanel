@@ -26,11 +26,12 @@ import (
 var assets embed.FS
 
 type Config struct {
-	StateDir     string
-	Socket       string
-	SecureCookie bool
-	AllowedHosts []string
-	Version      string
+	StateDir       string
+	Socket         string
+	SecureCookie   bool
+	AllowedHosts   []string
+	TrustedProxies []string
+	Version        string
 }
 
 type View struct {
@@ -44,15 +45,20 @@ type View struct {
 }
 
 type Server struct {
-	config    Config
-	auth      *auth
-	agent     *agentClient
-	templates *template.Template
-	handler   http.Handler
-	auditMu   sync.Mutex
+	config         Config
+	auth           *auth
+	agent          *agentClient
+	templates      *template.Template
+	handler        http.Handler
+	auditMu        sync.Mutex
+	trustedProxies trustedProxyPolicy
 }
 
 func New(config Config) (*Server, error) {
+	trustedProxies, err := parseTrustedProxies(config.TrustedProxies)
+	if err != nil {
+		return nil, err
+	}
 	a, err := newAuth(config.StateDir)
 	if err != nil {
 		return nil, err
@@ -90,7 +96,7 @@ func New(config Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{config: config, auth: a, agent: newAgentClient(config.Socket), templates: t}
+	s := &Server{config: config, auth: a, agent: newAgentClient(config.Socket), templates: t, trustedProxies: trustedProxies}
 	mux := http.NewServeMux()
 	static, _ := fs.Sub(assets, "web/static")
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(static))))
@@ -193,21 +199,13 @@ func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {
 	s.render(w, View{Page: "login", Title: "Вход", CSRF: token, Version: s.config.Version, Flash: notice(r.URL.Query().Get("notice"))})
 }
 
-func remoteIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
-
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("tp_login")
 	if err != nil || !sameToken(cookie.Value, r.PostForm.Get("csrf")) {
 		http.Error(w, "Обновите страницу входа.", http.StatusForbidden)
 		return
 	}
-	ip := remoteIP(r)
+	ip := s.remoteIP(r)
 	if !s.auth.allowAttempt(ip, time.Now()) {
 		http.Error(w, "Слишком много попыток. Повторите через 15 минут.", http.StatusTooManyRequests)
 		return
@@ -331,7 +329,7 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request, se session) {
 		target = "/settings"
 	}
 	err := s.agent.call(r.Context(), method, apiPath, input, nil)
-	s.audit(path, remoteIP(r), err == nil)
+	s.audit(path, s.remoteIP(r), err == nil)
 	if err != nil {
 		page := strings.TrimPrefix(target, "/")
 		if page == "" {
@@ -345,7 +343,7 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request, se session) {
 
 func (s *Server) password(w http.ResponseWriter, r *http.Request, se session) {
 	err := s.auth.changePassword(r.PostForm.Get("current_password"), r.PostForm.Get("new_password"))
-	s.audit("password", remoteIP(r), err == nil)
+	s.audit("password", s.remoteIP(r), err == nil)
 	if err != nil {
 		s.page(w, r, se, "settings", err.Error())
 		return

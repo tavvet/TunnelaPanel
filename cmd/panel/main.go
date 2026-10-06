@@ -23,7 +23,7 @@ func env(key, fallback string) string {
 }
 
 func main() {
-	app, err := panel.New(panel.Config{StateDir: env("PANEL_STATE_DIR", "/data/panel"), Socket: env("TT_SOCKET", "/run/tunnelapanel/control.sock"), SecureCookie: os.Getenv("PANEL_COOKIE_SECURE") == "true", AllowedHosts: strings.FieldsFunc(os.Getenv("PANEL_ALLOWED_HOSTS"), func(r rune) bool { return r == ',' || r == ' ' }), Version: version})
+	app, err := panel.New(panel.Config{StateDir: env("PANEL_STATE_DIR", "/data/panel"), Socket: env("TT_SOCKET", "/run/tunnelapanel/control.sock"), SecureCookie: os.Getenv("PANEL_COOKIE_SECURE") == "true", AllowedHosts: strings.FieldsFunc(os.Getenv("PANEL_ALLOWED_HOSTS"), func(r rune) bool { return r == ',' || r == ' ' }), TrustedProxies: strings.FieldsFunc(os.Getenv("PANEL_TRUSTED_PROXIES"), func(r rune) bool { return r == ',' || r == ' ' }), Version: version})
 	if err != nil {
 		log.Fatal(err)
 	}
