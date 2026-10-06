@@ -1,0 +1,6 @@
+/dist/
+/runtime/
+/.cache/
+.env
+*.test
+.DS_Store
