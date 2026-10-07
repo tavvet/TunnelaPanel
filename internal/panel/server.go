@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -22,6 +23,7 @@ type Config struct {
 type Server struct {
 	config         Config
 	auth           *auth
+	settings       *panelSettings
 	agent          *agentClient
 	templates      *template.Template
 	handler        http.Handler
@@ -33,6 +35,11 @@ type Server struct {
 func New(config Config) (*Server, error) {
 	// Reject an invalid trust policy before creating any authentication state.
 	trustedProxies, err := parseTrustedProxies(config.TrustedProxies)
+	if err != nil {
+		return nil, err
+	}
+
+	settings, err := newPanelSettings(config.StateDir)
 	if err != nil {
 		return nil, err
 	}
@@ -50,6 +57,7 @@ func New(config Config) (*Server, error) {
 	s := &Server{
 		config:         config,
 		auth:           a,
+		settings:       settings,
 		agent:          newAgentClient(config.Socket),
 		templates:      t,
 		trustedProxies: trustedProxies,
@@ -88,6 +96,7 @@ func New(config Config) (*Server, error) {
 	mux.HandleFunc("GET /users/qr", s.protect(s.qr))
 	mux.HandleFunc("POST /logout", s.protect(s.logout))
 	mux.HandleFunc("POST /password", s.protect(s.password))
+	mux.HandleFunc("POST /settings/preferences", s.protect(s.preferences))
 	for _, action := range []string{
 		"users/add",
 		"users/edit",
@@ -106,5 +115,10 @@ func New(config Config) (*Server, error) {
 
 // ServeHTTP applies security checks and dispatches the request to a panel route.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Snapshot once per request so a concurrent settings save cannot mix
+	// languages between the page title, body, errors, and response headers.
+	language := s.settings.language()
+	w.Header().Set("Content-Language", language)
+	r = r.WithContext(context.WithValue(r.Context(), languageContextKey{}, language))
 	s.handler.ServeHTTP(w, r)
 }

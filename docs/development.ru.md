@@ -25,6 +25,8 @@
 | `panel/server.go`, `panel/middleware.go`, `panel/audit.go` | HTTP-маршруты, защита запросов и аудит |
 | `panel/auth.go`, `panel/auth_handlers.go` | Учётные данные, сессии и обработчики входа и смены пароля |
 | `panel/pages.go`, `panel/actions.go`, `panel/templates.go` | Данные страниц, действия форм и отрисовка HTML |
+| `panel/settings.go`, `panel/i18n.go` | Сохранение настроек панели и локализация интерфейса |
+| `panel/locales/*.json` | Встроенные английские/русские тексты интерфейса и сообщения панели |
 | `endpoint/agent.go`, `endpoint/apply.go` | Жизненный цикл процесса и транзакции настроек |
 | `endpoint/store.go`, `endpoint/credentials.go` | Применённое состояние, черновик и кодирование TOML |
 | `endpoint/process.go`, `endpoint/logs.go` | Управление дочерним процессом и скрытие секретов в журнале |

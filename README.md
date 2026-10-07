@@ -4,7 +4,7 @@
 
 A self-hosted web panel for managing a [TrustTunnel](https://github.com/TrustTunnel/TrustTunnel) VPN server. Manage users, share connection settings, and monitor your server from a browser.
 
-Built with Go and Docker Compose. No separate database required. The panel UI is currently in Russian.
+Built with Go and Docker Compose. No separate database required. The panel opens in English by default; choose Russian in **Settings → Interface → Language**.
 
 ## Features
 
@@ -27,6 +27,7 @@ You need a Linux server, Docker Compose, a domain, and a TLS certificate. Build 
 | --- | --- |
 | [Installation](docs/installation.md) | Requirements, build, startup, and first login |
 | [TrustTunnel configuration](docs/configuration.md) | A new server or migration from an existing installation |
+| [Panel settings](docs/panel-settings.md) | Interface language and where panel preferences are stored |
 | [HTTPS and certificates](docs/https.md) | Domain access, reverse proxy, and certificate renewal |
 | [Operations](docs/operations.md) | Users, backups, updates, and troubleshooting |
 | [Development](docs/development.md) | Architecture, source layout, and checks |

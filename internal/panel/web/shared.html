@@ -13,61 +13,118 @@
 
 {{define "brand"}}
 <span class="brand-mark" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M5 5.5h14M12 6v13M7 10v7M17 10v7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span>
-<span class="brand-word">Tunnela<span class="brand-subtitle">TrustTunnel Panel</span></span>
+<span class="brand-word">Tunnela<span class="brand-subtitle">{{t $.Language "ui.common.panel_subtitle"}}</span></span>
 {{end}}
 
 {{define "header"}}
 <!doctype html>
-<html lang="ru">
-{{template "head" .}}
-<body>
-  <a class="skip-link" href="#main">Перейти к содержимому</a>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <a class="brand" href="/" aria-label="Tunnela — обзор сервера">{{template "brand" .}}</a>
-      <div class="nav-label">Управление</div>
-      <nav class="navigation" aria-label="Основная навигация">
-        <a href="/" class="nav-item{{if eq .Page "dashboard"}} is-active{{end}}"{{if eq .Page "dashboard"}} aria-current="page"{{end}}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="3" width="5" height="5" rx="1.2"/><rect x="12" y="3" width="5" height="5" rx="1.2"/><rect x="3" y="12" width="5" height="5" rx="1.2"/><rect x="12" y="12" width="5" height="5" rx="1.2"/></svg>Обзор</a>
-        <a href="/users" class="nav-item{{if or (eq .Page "users") (eq .Page "export")}} is-active{{end}}"{{if eq .Page "users"}} aria-current="page"{{end}}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="8" cy="6.2" r="3"/><path d="M2.5 17v-1.5a5.5 5.5 0 0 1 11 0V17M14 3.5a3 3 0 0 1 0 5.5M17.5 17v-1.5a5 5 0 0 0-2.3-4.2"/></svg>Пользователи</a>
-        <a href="/logs" class="nav-item{{if eq .Page "logs"}} is-active{{end}}"{{if eq .Page "logs"}} aria-current="page"{{end}}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="2.5" width="14" height="15" rx="2"/><path d="M6.5 6.5h7M6.5 10h7M6.5 13.5h4"/></svg>Журнал</a>
-        <a href="/settings" class="nav-item{{if eq .Page "settings"}} is-active{{end}}"{{if eq .Page "settings"}} aria-current="page"{{end}}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 5h14M3 15h14M3 10h14"/><circle cx="7" cy="5" r="2"/><circle cx="13" cy="10" r="2"/><circle cx="8" cy="15" r="2"/></svg>Настройки</a>
-      </nav>
-      <div class="sidebar-bottom">
-        <div class="sidebar-server"><span class="status-dot{{if .Status}}{{if .Status.Running}} is-online{{end}}{{end}}"></span><span>{{if .Status}}{{if .Status.Running}}TrustTunnel работает{{else}}TrustTunnel остановлен{{end}}{{else}}Статус недоступен{{end}}</span></div>
-        <div class="account">
-          <span class="account-avatar" aria-hidden="true">A</span>
-          <span class="account-name">{{.Username}}<small>Администратор</small></span>
-          <form action="/logout" method="post"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="icon-button" type="submit" aria-label="Выйти из панели" title="Выйти"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M8 3H4.5A1.5 1.5 0 0 0 3 4.5v11A1.5 1.5 0 0 0 4.5 17H8M8 10h9M13 6l4 4-4 4"/></svg></button></form>
-        </div>
-      </div>
-    </aside>
-    <div class="workspace">
-      <div class="topbar"><span>Ваш VPN-сервер</span><span class="topbar-tag">Локальное управление</span></div>
-      <main id="main" class="main-content">
-        {{template "notice" .}}
-        {{if .Status}}{{if .Status.Pending}}
-        <section class="pending-banner" aria-labelledby="pending-title">
-          <div><span class="eyebrow">Изменения готовы</span><h2 id="pending-title">Осталось применить настройки</h2><p>Изменения пользователей ещё не действуют. При применении TrustTunnel перезапустится и прервёт текущие VPN-соединения.</p></div>
-          <div class="button-row">
-            <form action="/apply" method="post" data-confirm="Применить изменения? TrustTunnel перезапустится, текущие VPN-соединения будут прерваны."><input type="hidden" name="csrf" value="{{$.CSRF}}"><button type="submit" class="button button-primary">Применить</button></form>
-            <form action="/discard" method="post" data-confirm="Отменить все неприменённые изменения пользователей?"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button type="submit" class="button button-secondary">Отменить изменения</button></form>
+<html lang="{{if .Language}}{{.Language}}{{else}}en{{end}}">
+  {{template "head" .}}
+  <body>
+    {{template "client-messages" .}}
+    <a class="skip-link" href="#main">{{t $.Language "ui.nav.skip"}}</a>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="/" aria-label="{{t $.Language "ui.nav.home_label"}}">{{template "brand" .}}</a>
+        <div class="nav-label">{{t $.Language "ui.nav.management"}}</div>
+        <nav class="navigation" aria-label="{{t $.Language "ui.nav.label"}}">
+          <a href="/" class="nav-item{{if eq .Page "dashboard"}} is-active{{end}}"{{if eq .Page "dashboard"}} aria-current="page"{{end}}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="3" width="5" height="5" rx="1.2"/><rect x="12" y="3" width="5" height="5" rx="1.2"/><rect x="3" y="12" width="5" height="5" rx="1.2"/><rect x="12" y="12" width="5" height="5" rx="1.2"/></svg>{{t $.Language "ui.common.dashboard"}}</a>
+          <a href="/users" class="nav-item{{if or (eq .Page "users") (eq .Page "export")}} is-active{{end}}"{{if eq .Page "users"}} aria-current="page"{{end}}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="8" cy="6.2" r="3"/><path d="M2.5 17v-1.5a5.5 5.5 0 0 1 11 0V17M14 3.5a3 3 0 0 1 0 5.5M17.5 17v-1.5a5 5 0 0 0-2.3-4.2"/></svg>{{t $.Language "ui.common.users"}}</a>
+          <a href="/logs" class="nav-item{{if eq .Page "logs"}} is-active{{end}}"{{if eq .Page "logs"}} aria-current="page"{{end}}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="2.5" width="14" height="15" rx="2"/><path d="M6.5 6.5h7M6.5 10h7M6.5 13.5h4"/></svg>{{t $.Language "ui.nav.logs"}}</a>
+          <a href="/settings" class="nav-item{{if eq .Page "settings"}} is-active{{end}}"{{if eq .Page "settings"}} aria-current="page"{{end}}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 5h14M3 15h14M3 10h14"/><circle cx="7" cy="5" r="2"/><circle cx="13" cy="10" r="2"/><circle cx="8" cy="15" r="2"/></svg>{{t $.Language "ui.common.settings"}}</a>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="sidebar-server">
+            <span class="status-dot{{if .Status}}{{if .Status.Running}} is-online{{end}}{{end}}"></span>
+            <span>{{if .Status}}{{if .Status.Running}}{{t $.Language "ui.sidebar.running"}}{{else}}{{t $.Language "ui.sidebar.stopped"}}{{end}}{{else}}{{t $.Language "ui.sidebar.unavailable"}}{{end}}</span>
           </div>
-        </section>
-        {{end}}{{end}}
+          <div class="account">
+            <span class="account-avatar" aria-hidden="true">A</span>
+            <span class="account-name">{{.Username}}<small>{{t $.Language "ui.sidebar.administrator"}}</small></span>
+            <form action="/logout" method="post">
+              <input type="hidden" name="csrf" value="{{.CSRF}}">
+              <button class="icon-button" type="submit" aria-label="{{t $.Language "ui.sidebar.logout_label"}}" title="{{t $.Language "ui.sidebar.logout"}}"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M8 3H4.5A1.5 1.5 0 0 0 3 4.5v11A1.5 1.5 0 0 0 4.5 17H8M8 10h9M13 6l4 4-4 4"/></svg></button>
+            </form>
+          </div>
+        </div>
+      </aside>
+      <div class="workspace">
+        <div class="topbar">
+          <span>{{t $.Language "ui.sidebar.your_server"}}</span>
+          <span class="topbar-tag">{{t $.Language "ui.sidebar.local_management"}}</span>
+        </div>
+        <main id="main" class="main-content">
+          {{template "notice" .}}
+          {{if .Status}}{{if .Status.Pending}}
+          <section class="pending-banner" aria-labelledby="pending-title">
+            <div>
+              <span class="eyebrow">{{t $.Language "ui.pending.eyebrow"}}</span>
+              <h2 id="pending-title">{{t $.Language "ui.pending.title"}}</h2>
+              <p>{{t $.Language "ui.pending.description"}}</p>
+            </div>
+            <div class="button-row">
+              <form action="/apply" method="post" data-confirm="{{t $.Language "ui.pending.apply_confirm"}}">
+                <input type="hidden" name="csrf" value="{{$.CSRF}}">
+                <button type="submit" class="button button-primary">{{t $.Language "ui.pending.apply"}}</button>
+              </form>
+              <form action="/discard" method="post" data-confirm="{{t $.Language "ui.pending.discard_confirm"}}">
+                <input type="hidden" name="csrf" value="{{$.CSRF}}">
+                <button type="submit" class="button button-secondary">{{t $.Language "ui.pending.discard"}}</button>
+              </form>
+            </div>
+          </section>
+          {{end}}{{end}}
 {{end}}
 
 {{define "notice"}}
-{{if .Error}}<div class="notice notice-error" role="alert"><span class="notice-symbol" aria-hidden="true">!</span><div>{{.Error}}</div></div>{{end}}
-{{if .Flash}}<div class="notice notice-success" role="status"><span class="notice-symbol" aria-hidden="true">✓</span><div>{{.Flash}}</div></div>{{end}}
-{{if .AgentError}}<div class="notice notice-error" role="alert"><span class="notice-symbol" aria-hidden="true">!</span><div><strong>Нет связи с TrustTunnel</strong><p>{{.AgentError}}</p></div></div>{{end}}
+{{if .Error}}
+<div class="notice notice-error" role="alert">
+  <span class="notice-symbol" aria-hidden="true">!</span>
+  <div>{{.Error}}</div>
+</div>
+{{end}}
+{{if .Flash}}
+<div class="notice notice-success" role="status">
+  <span class="notice-symbol" aria-hidden="true">✓</span>
+  <div>{{.Flash}}</div>
+</div>
+{{end}}
+{{if .AgentError}}
+<div class="notice notice-error" role="alert">
+  <span class="notice-symbol" aria-hidden="true">!</span>
+  <div>
+    <strong>{{t $.Language "ui.common.agent_unavailable"}}</strong>
+    <p>{{.AgentError}}</p>
+  </div>
+</div>
+{{end}}
 {{end}}
 
 {{define "footer"}}
-      </main>
-      <footer class="page-footer"><span>Tunnela <span class="footer-version">{{if .Version}}{{.Version}}{{else}}dev{{end}}</span></span><span>Панель управления TrustTunnel</span></footer>
+        </main>
+        <footer class="page-footer">
+          <span>Tunnela <span class="footer-version">{{if .Version}}{{.Version}}{{else}}dev{{end}}</span></span>
+          <span>{{t $.Language "ui.common.panel_description"}}</span>
+        </footer>
+      </div>
     </div>
-  </div>
-  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-</body>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  </body>
 </html>
+{{end}}
+
+{{define "client-messages"}}
+<div id="ui-messages" hidden
+     data-wait="{{t $.Language "ui.js.wait"}}"
+     data-show="{{t $.Language "ui.common.show"}}"
+     data-hide="{{t $.Language "ui.js.hide"}}"
+     data-show-password="{{t $.Language "ui.common.show_password"}}"
+     data-hide-password="{{t $.Language "ui.js.hide_password"}}"
+     data-generate-unavailable="{{t $.Language "ui.js.generate_unavailable"}}"
+     data-generated="{{t $.Language "ui.js.generated"}}"
+     data-copy-empty="{{t $.Language "ui.js.copy_empty"}}"
+     data-copied="{{t $.Language "ui.js.copied"}}"
+     data-copy-manual="{{t $.Language "ui.js.copy_manual"}}"
+     data-download-empty="{{t $.Language "ui.js.download_empty"}}">
+</div>
 {{end}}

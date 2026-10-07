@@ -155,7 +155,9 @@ Open [http://127.0.0.1:8080](http://127.0.0.1:8080). The username is **`admin`**
 cat /opt/tunnelapanel/runtime/panel/bootstrap-password
 ```
 
-Change it in **Settings / «Настройки»**. This removes the initial-password file. To issue VPN access, open **Users / «Пользователи»**, apply your changes, and get a user's configuration, connection link, or QR code. Applying user changes restarts TrustTunnel and interrupts current connections.
+Change it under **Settings → Administrator password** using **Change password**. This removes the initial-password file. To issue VPN access, open **Users**, prepare your changes, select **Apply**, and get a user's configuration, connection link, or QR code. Applying user changes restarts TrustTunnel and interrupts current connections.
+
+The interface starts in English. To use Russian, choose it in **Settings → Interface → Language** and save. This also changes the login page language without restarting the VPN. See [panel settings](./panel-settings.md).
 
 For public access to the panel, continue with [HTTPS setup](./https.md).
 

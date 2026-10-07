@@ -17,6 +17,7 @@ var assets embed.FS
 
 // View contains the data shared by the embedded HTML templates.
 type View struct {
+	Language     string
 	Page         string
 	Title        string
 	CSRF         string
@@ -35,13 +36,14 @@ type View struct {
 
 func newTemplates() (*template.Template, error) {
 	return template.New("panel").Funcs(template.FuncMap{
+		"t":     translate,
 		"bytes": formatBytes,
-		"datetime": func(t time.Time) string {
+		"datetime": func(language string, t time.Time) string {
 			if t.IsZero() {
 				return "—"
 			}
 
-			return t.UTC().Format("02.01.2006 15:04 UTC")
+			return t.UTC().Format(translate(language, "format.datetime"))
 		},
 		"uptime": func(t time.Time) string {
 			if t.IsZero() {
@@ -55,17 +57,19 @@ func newTemplates() (*template.Template, error) {
 
 			return d.Round(time.Second).String()
 		},
-		"remaining": func(t time.Time) string {
+		"remaining": func(language string, t time.Time) string {
 			if t.IsZero() {
 				return "—"
 			}
 
 			days := int(time.Until(t).Hours() / 24)
 			if days < 0 {
-				return "Истёк"
+				return translate(language, "format.expired")
 			}
-
-			return fmt.Sprintf("%d дн.", days)
+			if days == 1 {
+				return translate(language, "format.days_one", days)
+			}
+			return translate(language, "format.days_many", days)
 		},
 		"urlencode": url.QueryEscape,
 	}).ParseFS(
@@ -75,10 +79,14 @@ func newTemplates() (*template.Template, error) {
 }
 
 func (s *Server) render(w http.ResponseWriter, v View) {
+	if !validLanguage(v.Language) {
+		v.Language = defaultLanguage
+	}
+	v.Title = translate(v.Language, v.Title)
 	// Buffer template execution so a template error does not leave partial HTML.
 	var b bytes.Buffer
 	if err := s.templates.ExecuteTemplate(&b, v.Page, v); err != nil {
-		http.Error(w, "Не удалось отобразить страницу.", http.StatusInternalServerError)
+		http.Error(w, translate(v.Language, "error.render"), http.StatusInternalServerError)
 		return
 	}
 
@@ -86,13 +94,13 @@ func (s *Server) render(w http.ResponseWriter, v View) {
 	_, _ = w.Write(b.Bytes())
 }
 
-func formatBytes(n uint64) string {
+func formatBytes(language string, n uint64) string {
 	units := []string{
-		"Б",
-		"КиБ",
-		"МиБ",
-		"ГиБ",
-		"ТиБ",
+		translate(language, "format.bytes"),
+		translate(language, "format.kib"),
+		translate(language, "format.mib"),
+		translate(language, "format.gib"),
+		translate(language, "format.tib"),
 	}
 
 	v := float64(n)
@@ -109,15 +117,21 @@ func formatBytes(n uint64) string {
 	return fmt.Sprintf("%.1f %s", v, units[i])
 }
 
-func notice(key string) string {
-	return map[string]string{
-		"users/add":    "Пользователь добавлен в черновик.",
-		"users/edit":   "Изменения пользователя сохранены в черновике.",
-		"users/delete": "Удаление сохранено в черновике.",
-		"apply":        "Изменения применены. TrustTunnel перезапущен.",
-		"discard":      "Черновик отменён.",
-		"restart":      "TrustTunnel перезапущен.",
-		"tls/reload":   "Сертификаты перечитаны.",
-		"password":     "Пароль изменён. Войдите с новым паролем.",
-	}[key]
+func notice(language, action string) string {
+	// Only known actions can produce a banner; arbitrary query text is ignored.
+	key := map[string]string{
+		"users/add":    "notice.user_added",
+		"users/edit":   "notice.user_edited",
+		"users/delete": "notice.user_deleted",
+		"apply":        "notice.applied",
+		"discard":      "notice.discarded",
+		"restart":      "notice.restarted",
+		"tls/reload":   "notice.tls_reload",
+		"password":     "notice.password_changed",
+		"preferences":  "notice.preferences_saved",
+	}[action]
+	if key == "" {
+		return ""
+	}
+	return translate(language, key)
 }

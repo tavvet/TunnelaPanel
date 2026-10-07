@@ -1,8 +1,35 @@
 {{define "logs"}}
 {{template "header" .}}
-<div class="page-heading"><div><span class="eyebrow">Диагностика</span><h1>Журнал событий</h1><p>Последние сообщения процесса TrustTunnel.</p></div><a class="button button-secondary" href="/logs">Обновить журнал <span aria-hidden="true">↻</span></a></div>
-<section class="card log-card" aria-labelledby="log-heading"><div class="card-heading"><div class="log-title"><span class="status-dot{{if .Status}}{{if .Status.Running}} is-online{{end}}{{end}}"></span><h2 id="log-heading">trusttunnel_endpoint</h2></div><span class="small-label">{{len .Logs}} СТРОК</span></div>{{if .Logs}}<div class="log-toolbar"><span>Сообщения в хронологическом порядке</span><button class="text-button" type="button" data-scroll-bottom="log-output">К последним записям ↓</button></div><pre class="log-output" id="log-output" tabindex="0" aria-label="Журнал TrustTunnel">{{range .Logs}}{{.}}
-{{end}}</pre>{{else}}<div class="empty-state"><span class="empty-symbol" aria-hidden="true">≡</span><h3>Журнал пока пуст</h3><p>Здесь появятся сообщения после запуска TrustTunnel.</p></div>{{end}}</section>
-<p class="page-note">Журнал обновляется по кнопке. Сообщения помогают проверить запуск и найти причину ошибок подключения.</p>
+<div class="page-heading">
+  <div>
+    <span class="eyebrow">{{t $.Language "ui.logs.eyebrow"}}</span>
+    <h1>{{t $.Language "ui.logs.title"}}</h1>
+    <p>{{t $.Language "ui.logs.description"}}</p>
+  </div>
+  <a class="button button-secondary" href="/logs">{{t $.Language "ui.logs.refresh"}} <span aria-hidden="true">↻</span></a>
+</div>
+<section class="card log-card" aria-labelledby="log-heading">
+  <div class="card-heading">
+    <div class="log-title">
+      <span class="status-dot{{if .Status}}{{if .Status.Running}} is-online{{end}}{{end}}"></span>
+      <h2 id="log-heading">trusttunnel_endpoint</h2>
+    </div>
+    <span class="small-label">{{t $.Language "ui.logs.line_count" (len .Logs)}}</span>
+  </div>
+  {{if .Logs}}
+  <div class="log-toolbar">
+    <span>{{t $.Language "ui.logs.order"}}</span>
+    <button class="text-button" type="button" data-scroll-bottom="log-output">{{t $.Language "ui.logs.latest"}}</button>
+  </div>
+  <pre class="log-output" id="log-output" tabindex="0" aria-label="{{t $.Language "ui.logs.label"}}">{{range .Logs}}{{.}}
+{{end}}</pre>{{else}}
+  <div class="empty-state">
+    <span class="empty-symbol" aria-hidden="true">≡</span>
+    <h3>{{t $.Language "ui.logs.empty"}}</h3>
+    <p>{{t $.Language "ui.logs.empty_hint"}}</p>
+  </div>
+  {{end}}
+</section>
+<p class="page-note">{{t $.Language "ui.logs.manual_refresh"}}</p>
 {{template "footer" .}}
 {{end}}

@@ -1,6 +1,7 @@
 "use strict";
 
 (() => {
+  const messages = document.getElementById("ui-messages").dataset;
   let toastTimer;
 
   function notify(message) {
@@ -29,7 +30,7 @@
       if (submitter) {
         submitter.disabled = true;
         submitter.dataset.originalLabel = submitter.innerHTML;
-        if (!submitter.classList.contains("icon-button")) submitter.textContent = "Подождите…";
+        if (!submitter.classList.contains("icon-button")) submitter.textContent = messages.wait;
       }
     });
   });
@@ -52,8 +53,8 @@
       if (!input) return;
       const reveal = input.type === "password";
       input.type = reveal ? "text" : "password";
-      button.textContent = reveal ? "Скрыть" : "Показать";
-      button.setAttribute("aria-label", reveal ? "Скрыть пароль" : "Показать пароль");
+      button.textContent = reveal ? messages.hide : messages.show;
+      button.setAttribute("aria-label", reveal ? messages.hidePassword : messages.showPassword);
       button.setAttribute("aria-pressed", String(reveal));
     });
   });
@@ -63,7 +64,7 @@
       const input = document.getElementById(button.dataset.generatePassword);
       if (!input) return;
       if (!window.crypto || !window.crypto.getRandomValues) {
-        notify("Генератор недоступен в этом браузере. Задайте пароль вручную.");
+        notify(messages.generateUnavailable);
         return;
       }
       const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
@@ -72,7 +73,7 @@
       input.value = Array.from(random, (value) => alphabet[value & 63]).join("");
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.focus();
-      notify("Сгенерирован случайный пароль из 24 символов.");
+      notify(messages.generated);
     });
   });
 
@@ -82,19 +83,19 @@
       if (!input) return;
       const value = input.value;
       if (!value) {
-        notify("Нет данных для копирования.");
+        notify(messages.copyEmpty);
         return;
       }
       try {
         if (!navigator.clipboard || !window.isSecureContext) throw new Error("Clipboard unavailable");
         await navigator.clipboard.writeText(value);
-        notify("Скопировано в буфер обмена.");
+        notify(messages.copied);
       } catch (_) {
         input.focus();
         input.select();
         let copied = false;
         try { copied = document.execCommand("copy"); } catch (_) { /* Keep text selected for manual copy. */ }
-        notify(copied ? "Скопировано в буфер обмена." : "Текст выделен. Скопируйте его сочетанием клавиш или через меню браузера.");
+        notify(copied ? messages.copied : messages.copyManual);
       }
     });
   });
@@ -103,7 +104,7 @@
     button.addEventListener("click", () => {
       const input = document.getElementById(button.dataset.downloadTarget);
       if (!input || !input.value) {
-        notify("Нет конфигурации для скачивания.");
+        notify(messages.downloadEmpty);
         return;
       }
       const blob = new Blob([input.value], { type: "application/toml;charset=utf-8" });

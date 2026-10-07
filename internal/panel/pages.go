@@ -10,24 +10,26 @@ import (
 )
 
 func (s *Server) page(w http.ResponseWriter, r *http.Request, se session, page, errMessage string) {
+	language := requestLanguage(r)
 	v := View{
-		Page: page,
+		Language: language,
+		Page:     page,
 		Title: map[string]string{
-			"dashboard": "Обзор",
-			"users":     "Пользователи",
-			"logs":      "Журнал",
-			"settings":  "Настройки",
+			"dashboard": "title.dashboard",
+			"users":     "title.users",
+			"logs":      "title.logs",
+			"settings":  "title.settings",
 		}[page],
 		CSRF:     se.CSRF,
 		Username: "admin",
 		Version:  s.config.Version,
 		Error:    errMessage,
-		Flash:    notice(r.URL.Query().Get("notice")),
+		Flash:    notice(language, r.URL.Query().Get("notice")),
 	}
 
 	var st protocol.Status
 	if err := s.agent.call(r.Context(), "GET", "/v1/status", nil, &st); err != nil {
-		v.AgentError = err.Error()
+		v.AgentError = errorText(requestLanguage(r), err)
 	} else {
 		v.Status = &st
 	}
@@ -54,7 +56,7 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request, se session, page, 
 	}
 
 	if err != nil && v.AgentError == "" {
-		v.AgentError = err.Error()
+		v.AgentError = errorText(requestLanguage(r), err)
 	}
 
 	s.render(w, v)
@@ -64,7 +66,7 @@ func (s *Server) export(w http.ResponseWriter, r *http.Request, se session) {
 	var ex protocol.Export
 	err := s.agent.call(r.Context(), "GET", "/v1/export?username="+url.QueryEscape(r.URL.Query().Get("username")), nil, &ex)
 	if err != nil {
-		s.page(w, r, se, "users", err.Error())
+		s.page(w, r, se, "users", errorText(requestLanguage(r), err))
 		return
 	}
 
@@ -73,8 +75,9 @@ func (s *Server) export(w http.ResponseWriter, r *http.Request, se session) {
 	s.render(
 		w,
 		View{
+			Language: requestLanguage(r),
 			Page:     "export",
-			Title:    "Подключение",
+			Title:    "title.export",
 			CSRF:     se.CSRF,
 			Username: "admin",
 			Version:  s.config.Version,
@@ -87,13 +90,13 @@ func (s *Server) export(w http.ResponseWriter, r *http.Request, se session) {
 func (s *Server) qr(w http.ResponseWriter, r *http.Request, se session) {
 	var ex protocol.Export
 	if err := s.agent.call(r.Context(), "GET", "/v1/export?username="+url.QueryEscape(r.URL.Query().Get("username")), nil, &ex); err != nil {
-		http.Error(w, "Конфигурация недоступна", http.StatusBadRequest)
+		http.Error(w, translate(requestLanguage(r), "error.export"), http.StatusBadRequest)
 		return
 	}
 
 	png, err := qrcode.Encode(ex.DeepLink, qrcode.Medium, 384)
 	if err != nil {
-		http.Error(w, "Не удалось создать QR-код", http.StatusInternalServerError)
+		http.Error(w, translate(requestLanguage(r), "error.qr"), http.StatusInternalServerError)
 		return
 	}
 

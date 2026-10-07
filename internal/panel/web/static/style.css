@@ -238,6 +238,8 @@ input:-webkit-autofill { -webkit-box-shadow: 0 0 0 100px #172636 inset; -webkit-
 .log-output { overflow: auto; max-height: 65vh; min-height: 330px; margin: 0; padding: 22px 25px 30px; background: #0c141f; color: #9fb5c6; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 11px; line-height: 1.9; tab-size: 2; scrollbar-color: #35465d transparent; }
 .settings-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 23px; }
 .settings-grid > .card { margin: 0; }
+.settings-interface { grid-column: 1 / -1; }
+.settings-interface .field { max-width: 320px; }
 .settings-grid .form-stack { padding-top: 4px; }
 .settings-callout { margin: 0 25px 25px; padding: 19px; border: 1px solid var(--border-soft); border-radius: 10px; background: #0f1925; }
 .settings-callout p { margin: 8px 0 12px; color: var(--muted); font-size: 12px; }

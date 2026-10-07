@@ -1,26 +1,118 @@
 {{define "users"}}
 {{template "header" .}}
-<div class="page-heading"><div><span class="eyebrow">Управление доступом</span><h1>Пользователи</h1><p>Создавайте учётные записи и выдавайте настройки подключения.</p></div><a class="button button-secondary" href="#new-user">Добавить пользователя <span aria-hidden="true">+</span></a></div>
-
+<div class="page-heading">
+  <div>
+    <span class="eyebrow">{{t $.Language "ui.users.eyebrow"}}</span>
+    <h1>{{t $.Language "ui.common.users"}}</h1>
+    <p>{{t $.Language "ui.users.description"}}</p>
+  </div>
+  <a class="button button-secondary" href="#new-user">{{t $.Language "ui.users.add"}} <span aria-hidden="true">+</span></a>
+</div>
 <section class="card" aria-labelledby="users-heading">
-  <div class="card-heading"><div><h2 id="users-heading">Учётные записи <span class="count-badge">{{len .Users}}</span></h2><p>Изменения вступают в силу после применения и перезапуска сервиса.</p></div></div>
-  {{if .Users}}<div class="table-scroll"><table class="users-table"><thead><tr><th scope="col">Пользователь</th><th scope="col">Доступ</th><th scope="col">Подключение</th><th scope="col" class="actions-heading">Управление</th></tr></thead><tbody>
-  {{range .Users}}<tr>
-    <td><div class="user-cell"><span class="user-avatar" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="7" r="3"/><path d="M4.5 17v-1a5.5 5.5 0 0 1 11 0v1"/></svg></span><span class="cell-strong user-name">{{.Username}}</span></div></td>
-    <td>{{if .Enabled}}<span class="badge badge-teal"><span class="status-dot is-online"></span>Включён</span>{{else}}<span class="badge badge-muted"><span class="status-dot"></span>Отключён</span>{{end}}</td>
-    <td>{{if .Enabled}}<a href="/users/export?username={{urlencode .Username}}" class="text-link">Ссылка и QR <span aria-hidden="true">↗</span></a>{{else}}<span class="muted">Недоступно</span>{{end}}</td>
-    <td class="user-actions"><details class="row-editor"><summary class="button button-quiet">Изменить <span aria-hidden="true">⌄</span></summary><form action="/users/edit" method="post" class="edit-form form-stack"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="username" value="{{.Username}}"><label class="field"><span>Новый пароль</span><input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="Оставить прежний"><small>От 12 до 128 символов. Пустое поле сохранит текущий пароль.</small></label><label class="field"><span>Доступ к VPN</span><select name="enabled"><option value="true"{{if .Enabled}} selected{{end}}>Включён</option><option value="false"{{if not .Enabled}} selected{{end}}>Отключён</option></select></label><button class="button button-primary button-small" type="submit">Сохранить изменения</button></form></details><form action="/users/delete" method="post" data-confirm="Удалить пользователя «{{.Username}}»? Доступ прекратится после применения изменений."><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="username" value="{{.Username}}"><button class="icon-button danger-button" type="submit" title="Удалить {{.Username}}" aria-label="Удалить пользователя {{.Username}}"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 5h14M7 5V3h6v2M5 5l.8 12h8.4L15 5M8 8v6M12 8v6"/></svg></button></form></td>
-  </tr>{{end}}
-  </tbody></table></div>{{else}}<div class="empty-state"><span class="empty-symbol" aria-hidden="true">+</span><h3>Добавьте первого пользователя</h3><p>Задайте имя и пароль, примените изменения и передайте ссылку для подключения.</p><a class="text-link" href="#new-user">Создать учётную запись <span aria-hidden="true">→</span></a></div>{{end}}
+  <div class="card-heading">
+    <div>
+      <h2 id="users-heading">{{t $.Language "ui.users.accounts"}} <span class="count-badge">{{len .Users}}</span></h2>
+      <p>{{t $.Language "ui.users.apply_hint"}}</p>
+    </div>
+  </div>
+  {{if .Users}}
+  <div class="table-scroll">
+    <table class="users-table">
+      <thead>
+        <tr>
+          <th scope="col">{{t $.Language "ui.common.user"}}</th>
+          <th scope="col">{{t $.Language "ui.users.access"}}</th>
+          <th scope="col">{{t $.Language "ui.common.connection"}}</th>
+          <th scope="col" class="actions-heading">{{t $.Language "ui.users.actions"}}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Users}}
+        <tr>
+          <td>
+            <div class="user-cell">
+              <span class="user-avatar" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="7" r="3"/><path d="M4.5 17v-1a5.5 5.5 0 0 1 11 0v1"/></svg></span>
+              <span class="cell-strong user-name">{{.Username}}</span>
+            </div>
+          </td>
+          <td>{{if .Enabled}}<span class="badge badge-teal">
+              <span class="status-dot is-online"></span>{{t $.Language "ui.common.enabled"}}</span>{{else}}<span class="badge badge-muted">
+              <span class="status-dot"></span>{{t $.Language "ui.common.disabled"}}</span>{{end}}
+          </td>
+          <td>{{if .Enabled}}<a href="/users/export?username={{urlencode .Username}}" class="text-link">{{t $.Language "ui.users.link_qr"}} <span aria-hidden="true">↗</span></a>{{else}}<span class="muted">{{t $.Language "ui.common.unavailable"}}</span>{{end}}
+          </td>
+          <td class="user-actions">
+            <details class="row-editor">
+              <summary class="button button-quiet">{{t $.Language "ui.users.edit"}} <span aria-hidden="true">⌄</span>
+              </summary>
+              <form action="/users/edit" method="post" class="edit-form form-stack">
+                <input type="hidden" name="csrf" value="{{$.CSRF}}">
+                <input type="hidden" name="username" value="{{.Username}}">
+                <label class="field">
+                  <span>{{t $.Language "ui.common.new_password"}}</span>
+                  <input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="{{t $.Language "ui.users.keep_password"}}">
+                  <small>{{t $.Language "ui.users.edit_password_hint"}}</small>
+                </label>
+                <label class="field">
+                  <span>{{t $.Language "ui.users.vpn_access"}}</span>
+                  <select name="enabled">
+                    <option value="true"{{if .Enabled}} selected{{end}}>{{t $.Language "ui.common.enabled"}}</option>
+                    <option value="false"{{if not .Enabled}} selected{{end}}>{{t $.Language "ui.common.disabled"}}</option>
+                  </select>
+                </label>
+                <button class="button button-primary button-small" type="submit">{{t $.Language "ui.users.save"}}</button>
+              </form>
+            </details>
+            <form action="/users/delete" method="post" data-confirm="{{t $.Language "ui.users.delete_confirm" .Username}}">
+              <input type="hidden" name="csrf" value="{{$.CSRF}}">
+              <input type="hidden" name="username" value="{{.Username}}">
+              <button class="icon-button danger-button" type="submit" title="{{t $.Language "ui.users.delete_title" .Username}}" aria-label="{{t $.Language "ui.users.delete_label" .Username}}"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 5h14M7 5V3h6v2M5 5l.8 12h8.4L15 5M8 8v6M12 8v6"/></svg></button>
+            </form>
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}
+  <div class="empty-state">
+    <span class="empty-symbol" aria-hidden="true">+</span>
+    <h3>{{t $.Language "ui.users.empty"}}</h3>
+    <p>{{t $.Language "ui.users.empty_hint"}}</p>
+    <a class="text-link" href="#new-user">{{t $.Language "ui.users.create_account"}} <span aria-hidden="true">→</span></a>
+  </div>
+  {{end}}
 </section>
-
 <section id="new-user" class="card create-user-card" aria-labelledby="new-user-heading">
-  <div class="card-heading"><div><span class="eyebrow">Новая учётная запись</span><h2 id="new-user-heading">Добавить пользователя</h2><p>После применения настроек можно будет получить ссылку и QR-код.</p></div><span class="large-plus" aria-hidden="true">+</span></div>
+  <div class="card-heading">
+    <div>
+      <span class="eyebrow">{{t $.Language "ui.users.new_account"}}</span>
+      <h2 id="new-user-heading">{{t $.Language "ui.users.add"}}</h2>
+      <p>{{t $.Language "ui.users.new_hint"}}</p>
+    </div>
+    <span class="large-plus" aria-hidden="true">+</span>
+  </div>
   <form action="/users/add" method="post" class="create-user-form">
     <input type="hidden" name="csrf" value="{{.CSRF}}">
-    <div class="field"><label for="new-username">Имя пользователя</label><input id="new-username" name="username" type="text" required maxlength="64" pattern="[A-Za-z0-9_.@\-]{1,64}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Например, alex"><small>До 64 символов: латинские буквы, цифры и _ . @ -</small></div>
-    <div class="field"><div class="label-row"><label for="new-password">Пароль</label><button class="text-button" type="button" data-generate-password="new-password">Сгенерировать</button></div><div class="input-with-action"><input id="new-password" name="password" type="password" required minlength="12" maxlength="128" autocomplete="new-password" placeholder="Не менее 12 символов"><button class="input-action" type="button" data-toggle-password="new-password" aria-label="Показать пароль" aria-pressed="false">Показать</button></div><small>12–128 символов. Генератор создаёт случайный пароль.</small></div>
-    <div class="form-submit"><button class="button button-primary" type="submit">Добавить пользователя</button></div>
+    <div class="field">
+      <label for="new-username">{{t $.Language "ui.users.username"}}</label>
+      <input id="new-username" name="username" type="text" required maxlength="64" pattern="[A-Za-z0-9_.@\-]{1,64}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="{{t $.Language "ui.users.username_placeholder"}}">
+      <small>{{t $.Language "ui.users.username_hint"}}</small>
+    </div>
+    <div class="field">
+      <div class="label-row">
+        <label for="new-password">{{t $.Language "ui.common.password"}}</label>
+        <button class="text-button" type="button" data-generate-password="new-password">{{t $.Language "ui.common.generate"}}</button>
+      </div>
+      <div class="input-with-action">
+        <input id="new-password" name="password" type="password" required minlength="12" maxlength="128" autocomplete="new-password" placeholder="{{t $.Language "ui.common.password_placeholder"}}">
+        <button class="input-action" type="button" data-toggle-password="new-password" aria-label="{{t $.Language "ui.common.show_password"}}" aria-pressed="false">{{t $.Language "ui.common.show"}}</button>
+      </div>
+      <small>{{t $.Language "ui.users.password_hint"}}</small>
+    </div>
+    <div class="form-submit">
+      <button class="button button-primary" type="submit">{{t $.Language "ui.users.add"}}</button>
+    </div>
   </form>
 </section>
 {{template "footer" .}}

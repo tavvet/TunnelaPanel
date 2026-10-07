@@ -44,7 +44,7 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request, se session) {
 					r,
 					se,
 					"users",
-					"Пароль: 12–128 печатных ASCII-символов, без кавычек, обратной косой черты и пробелов по краям.",
+					translate(requestLanguage(r), "error.vpn_password"),
 				)
 				return
 			}
@@ -54,7 +54,7 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request, se session) {
 			method = "PATCH"
 			if e := r.PostForm.Get("enabled"); e != "" {
 				if e != "true" && e != "false" {
-					http.Error(w, "Некорректное состояние", 400)
+					http.Error(w, translate(requestLanguage(r), "error.user_state"), 400)
 					return
 				}
 
@@ -81,7 +81,7 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request, se session) {
 			page = "dashboard"
 		}
 
-		s.page(w, r, se, page, err.Error())
+		s.page(w, r, se, page, errorText(requestLanguage(r), err))
 		return
 	}
 

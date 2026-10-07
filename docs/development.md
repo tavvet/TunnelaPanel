@@ -25,6 +25,8 @@ Start with `cmd/panel/main.go` and `cmd/endpoint-agent/main.go` for startup and 
 | `panel/server.go`, `panel/middleware.go`, `panel/audit.go` | HTTP routes, request protection and audit logging |
 | `panel/auth.go`, `panel/auth_handlers.go` | Credentials, sessions and login/password handlers |
 | `panel/pages.go`, `panel/actions.go`, `panel/templates.go` | Page data, form actions and HTML rendering |
+| `panel/settings.go`, `panel/i18n.go` | Persistent panel preferences and interface localization |
+| `panel/locales/*.json` | Embedded English/Russian interface text and panel messages |
 | `endpoint/agent.go`, `endpoint/apply.go` | Process lifecycle and configuration transactions |
 | `endpoint/store.go`, `endpoint/credentials.go` | Applied/draft state and TOML encoding |
 | `endpoint/process.go`, `endpoint/logs.go` | Child process supervision and log redaction |

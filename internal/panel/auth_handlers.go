@@ -27,11 +27,12 @@ func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {
 	s.render(
 		w,
 		View{
-			Page:    "login",
-			Title:   "Вход",
-			CSRF:    token,
-			Version: s.config.Version,
-			Flash:   notice(r.URL.Query().Get("notice")),
+			Language: requestLanguage(r),
+			Page:     "login",
+			Title:    "title.login",
+			CSRF:     token,
+			Version:  s.config.Version,
+			Flash:    notice(requestLanguage(r), r.URL.Query().Get("notice")),
 		},
 	)
 }
@@ -39,7 +40,7 @@ func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("tp_login")
 	if err != nil || !sameToken(cookie.Value, r.PostForm.Get("csrf")) {
-		http.Error(w, "Обновите страницу входа.", http.StatusForbidden)
+		http.Error(w, translate(requestLanguage(r), "error.login_refresh"), http.StatusForbidden)
 		return
 	}
 
@@ -47,7 +48,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	if !s.auth.allowAttempt(ip, time.Now()) {
 		http.Error(
 			w,
-			"Слишком много попыток. Повторите через 15 минут.",
+			translate(requestLanguage(r), "error.login_rate"),
 			http.StatusTooManyRequests,
 		)
 		return
@@ -66,11 +67,12 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		s.render(
 			w,
 			View{
-				Page:    "login",
-				Title:   "Вход",
-				CSRF:    cookie.Value,
-				Error:   "Неверное имя пользователя или пароль.",
-				Version: s.config.Version,
+				Language: requestLanguage(r),
+				Page:     "login",
+				Title:    "title.login",
+				CSRF:     cookie.Value,
+				Error:    translate(requestLanguage(r), "error.login_credentials"),
+				Version:  s.config.Version,
 			},
 		)
 		return
@@ -96,7 +98,7 @@ func (s *Server) password(w http.ResponseWriter, r *http.Request, se session) {
 	err := s.auth.changePassword(r.PostForm.Get("current_password"), r.PostForm.Get("new_password"))
 	s.audit("password", s.remoteIP(r), err == nil)
 	if err != nil {
-		s.page(w, r, se, "settings", err.Error())
+		s.page(w, r, se, "settings", errorText(requestLanguage(r), err))
 		return
 	}
 

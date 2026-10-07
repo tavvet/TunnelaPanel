@@ -4,6 +4,8 @@
 
 Follow [installation steps 1–3](./installation.md) first: prepare the applications, a TLS certificate, and `deploy/.env`. Run the commands below as `root` from `/opt/tunnelapanel`.
 
+This guide configures the VPN endpoint. The panel's interface language is managed separately in [panel settings](./panel-settings.md).
+
 Choose **one** method. Do not create `runtime/config` before importing an existing installation.
 
 ## A. New server

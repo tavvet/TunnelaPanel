@@ -38,7 +38,7 @@ func (s *Server) security(next http.Handler) http.Handler {
 		}
 
 		if !allowed {
-			http.Error(w, "Unknown host", http.StatusForbidden)
+			http.Error(w, translate(requestLanguage(r), "error.unknown_host"), http.StatusForbidden)
 			return
 		}
 
@@ -49,13 +49,13 @@ func (s *Server) security(next http.Handler) http.Handler {
 			if origin := r.Header.Get("Origin"); origin != "" {
 				u, err := url.Parse(origin)
 				if err != nil || u.Host != r.Host || (u.Scheme != "http" && u.Scheme != "https") {
-					http.Error(w, "Недопустимый источник запроса", http.StatusForbidden)
+					http.Error(w, translate(requestLanguage(r), "error.origin"), http.StatusForbidden)
 					return
 				}
 			}
 
 			if err := r.ParseForm(); err != nil {
-				http.Error(w, "Некорректный запрос", http.StatusBadRequest)
+				http.Error(w, translate(requestLanguage(r), "error.request"), http.StatusBadRequest)
 				return
 			}
 		}
@@ -85,7 +85,7 @@ func (s *Server) protect(fn func(http.ResponseWriter, *http.Request, session)) h
 		}
 
 		if r.Method == http.MethodPost && !sameToken(se.CSRF, r.PostForm.Get("csrf")) {
-			http.Error(w, "Сессия формы истекла. Обновите страницу.", http.StatusForbidden)
+			http.Error(w, translate(requestLanguage(r), "error.csrf"), http.StatusForbidden)
 			return
 		}
 

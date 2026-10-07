@@ -1,28 +1,50 @@
 {{define "login"}}
 <!doctype html>
-<html lang="ru">
-{{template "head" .}}
-<body class="login-body">
-  <main class="login-layout">
-    <div class="login-intro">
-      <a class="brand" href="/login">{{template "brand" .}}</a>
-      <div class="login-copy"><span class="eyebrow">Доступ под вашим контролем</span><h1>Ваш сервер.<br>Всё на своих местах.</h1><p>Пользователи, подключения и состояние TrustTunnel — в одной простой панели.</p></div>
-      <div class="login-decoration" aria-hidden="true"><div class="tunnel-ring ring-one"></div><div class="tunnel-ring ring-two"></div><div class="tunnel-ring ring-three"></div><div class="tunnel-center"><svg viewBox="0 0 32 32" fill="none"><path d="M16 3 27 7v9c0 6-5 10-11 13C10 26 5 22 5 16V7l11-4Z"/><path d="m11 16 3 3 7-7"/></svg></div></div>
-      <span class="login-footnote">Tunnela · TrustTunnel Panel</span>
-    </div>
-    <section class="login-card" aria-labelledby="login-title">
-      <span class="eyebrow">Панель администратора</span><h2 id="login-title">С возвращением</h2><p class="muted">Войдите, чтобы управлять VPN-сервером.</p>
-      {{template "notice" .}}
-      <form action="/login" method="post" class="form-stack">
-        <input type="hidden" name="csrf" value="{{.CSRF}}">
-        <div class="field"><label for="login-username">Имя администратора</label><input id="login-username" name="username" type="text" autocomplete="username" required autofocus maxlength="128" value="{{.Username}}" placeholder="admin" spellcheck="false" autocapitalize="none"></div>
-        <div class="field"><label for="login-password">Пароль</label><div class="input-with-action"><input id="login-password" name="password" type="password" autocomplete="current-password" required maxlength="128"><button type="button" class="input-action" data-toggle-password="login-password" aria-label="Показать пароль" aria-pressed="false">Показать</button></div></div>
-        <button class="button button-primary button-full" type="submit">Войти в панель <span aria-hidden="true">→</span></button>
-      </form>
-      <p class="login-help">Используйте учётную запись администратора панели.</p>
-    </section>
-  </main>
-  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-</body>
+<html lang="{{if .Language}}{{.Language}}{{else}}en{{end}}">
+  {{template "head" .}}
+  <body class="login-body">
+    {{template "client-messages" .}}
+    <main class="login-layout">
+      <div class="login-intro">
+        <a class="brand" href="/login">{{template "brand" .}}</a>
+        <div class="login-copy">
+          <span class="eyebrow">{{t $.Language "ui.login.eyebrow"}}</span>
+          <h1>{{t $.Language "ui.login.headline_server"}}<br>{{t $.Language "ui.login.headline_order"}}</h1>
+          <p>{{t $.Language "ui.login.description"}}</p>
+        </div>
+        <div class="login-decoration" aria-hidden="true">
+          <div class="tunnel-ring ring-one"></div>
+          <div class="tunnel-ring ring-two"></div>
+          <div class="tunnel-ring ring-three"></div>
+          <div class="tunnel-center"><svg viewBox="0 0 32 32" fill="none"><path d="M16 3 27 7v9c0 6-5 10-11 13C10 26 5 22 5 16V7l11-4Z"/><path d="m11 16 3 3 7-7"/></svg></div>
+        </div>
+        <span class="login-footnote">Tunnela · {{t $.Language "ui.common.panel_subtitle"}}</span>
+      </div>
+      <section class="login-card" aria-labelledby="login-title">
+        <span class="eyebrow">{{t $.Language "ui.login.admin_panel"}}</span>
+        <h2 id="login-title">{{t $.Language "ui.login.welcome"}}</h2>
+        <p class="muted">{{t $.Language "ui.login.prompt"}}</p>
+        {{template "notice" .}}
+        <form action="/login" method="post" class="form-stack">
+          <input type="hidden" name="csrf" value="{{.CSRF}}">
+          <div class="field">
+            <label for="login-username">{{t $.Language "ui.login.username"}}</label>
+            <input id="login-username" name="username" type="text" autocomplete="username" required autofocus maxlength="128" value="{{.Username}}" placeholder="admin" spellcheck="false" autocapitalize="none">
+          </div>
+          <div class="field">
+            <label for="login-password">{{t $.Language "ui.common.password"}}</label>
+            <div class="input-with-action">
+              <input id="login-password" name="password" type="password" autocomplete="current-password" required maxlength="128">
+              <button type="button" class="input-action" data-toggle-password="login-password" aria-label="{{t $.Language "ui.common.show_password"}}" aria-pressed="false">{{t $.Language "ui.common.show"}}</button>
+            </div>
+          </div>
+          <button class="button button-primary button-full" type="submit">{{t $.Language "ui.login.submit"}} <span aria-hidden="true">→</span>
+          </button>
+        </form>
+        <p class="login-help">{{t $.Language "ui.login.help"}}</p>
+      </section>
+    </main>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  </body>
 </html>
 {{end}}

@@ -279,14 +279,14 @@ func (a *auth) removeSession(id string) {
 
 func (a *auth) changePassword(current, password string) error {
 	if len(password) < 12 || len(password) > 128 {
-		return errors.New("Пароль должен содержать от 12 до 128 символов.")
+		return uiError("error.password_length")
 	}
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
 	if !a.checkLocked("admin", current) {
-		return errors.New("Текущий пароль неверен.")
+		return uiError("error.password_current")
 	}
 
 	f := authFile{
@@ -297,18 +297,18 @@ func (a *auth) changePassword(current, password string) error {
 	var err error
 	f.Hash, err = passwordHash(password, f.Salt)
 	if err != nil {
-		return errors.New("Не удалось обновить пароль.")
+		return uiError("error.password_update")
 	}
 
 	// Persist credentials before publishing them in memory and invalidating sessions.
 	if err := atomicJSON(filepath.Join(a.dir, "auth.json"), f); err != nil {
-		return errors.New("Не удалось сохранить пароль.")
+		return uiError("error.password_save")
 	}
 
 	a.file = f
 	a.sessions = make(map[string]session)
 	if err := os.Remove(filepath.Join(a.dir, "bootstrap-password")); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return errors.New("Пароль изменён. Не удалось удалить файл первоначального пароля.")
+		return uiError("error.bootstrap_remove")
 	}
 
 	return nil

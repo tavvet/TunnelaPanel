@@ -6,11 +6,13 @@ Run server commands as `root` or through `sudo`, from `/opt/tunnelapanel`. Adjus
 
 ## Users and administration
 
-Changes in **Users (Пользователи)** are saved as a draft. Prepare the changes, then apply them together or discard the draft. Applying changes restarts TrustTunnel, briefly disconnects VPN clients and resets traffic counters. At least one enabled user must remain. Client configurations, connection links and QR codes are available for applied, enabled users.
+Changes in **Users** are saved as a draft. Prepare the changes, then select **Apply** to apply them together or **Discard changes** to discard the draft. Applying changes restarts TrustTunnel, briefly disconnects VPN clients and resets traffic counters. At least one enabled user must remain. Client configurations, connection links and QR codes are available for applied, enabled users.
 
 A manual VPN restart uses the applied settings; it does not apply the draft. TLS certificate reload is a separate operation. Configure automatic [certificate renewal and reload](https.md#certificate-renewal), including when you access the panel only through SSH.
 
-Change the initial administrator password in **Settings (Настройки)**. A successful password change removes `runtime/panel/bootstrap-password` and invalidates existing sessions. Sessions are held in memory, so restarting the panel also requires signing in again. VPN user passwords and the administrator password are separate.
+Change the initial administrator password under **Settings → Administrator password** using **Change password**. A successful password change removes `runtime/panel/bootstrap-password` and invalidates existing sessions. Sessions are held in memory, so restarting the panel also requires signing in again. VPN user passwords and the administrator password are separate.
+
+The interface defaults to English. Choose Russian in **Settings → Interface → Language**; the saved choice applies to the whole panel, including login. Saving it does not restart TrustTunnel or change its draft. See [panel settings](panel-settings.md).
 
 ## Persistent data and backups
 
@@ -20,13 +22,13 @@ Change the initial administrator password in **Settings (Настройки)**. 
 | `runtime/state/state.json` | Applied users and the draft, including passwords of disabled users |
 | `runtime/state/backups/` | Credentials and agent state saved before each apply |
 | `runtime/state/apply.json` | Recovery journal during an apply; recovered automatically after an interrupted operation |
-| `runtime/panel/` | Administrator authentication data, initial password until changed, and `audit.jsonl` |
+| `runtime/panel/` | Administrator authentication data, initial password until changed, `settings.json` with the interface language, and `audit.jsonl` |
 | `deploy/.env`, `deploy/nginx.conf`, `deploy/certbot-deploy-hook.sh` | Deployment settings and local customizations |
 | `/etc/letsencrypt/` | Certificates, private keys, renewal settings and installed deploy hooks |
 
 Keep these files and their backups accessible only to the server administrator. `runtime/` and apply backups contain VPN passwords. Store backups outside the release directory and do not commit them to Git.
 
-Back up `runtime/config/` and `runtime/state/` together while no changes are being applied. The automatic apply backups cover credentials and agent state; also back up the other paths in the table. Container recreation preserves the bind-mounted `runtime/` data.
+Back up the whole `runtime/` directory while no administrative changes are being made. Keep `runtime/config/` and `runtime/state/` from the same snapshot, and include `runtime/panel/` to preserve administrator credentials and panel preferences. The automatic apply backups cover only VPN credentials and agent state; also back up the other paths in the table. Container recreation preserves the bind-mounted `runtime/` data.
 
 ## Updates
 
@@ -52,7 +54,7 @@ curl --fail http://127.0.0.1:8080/healthz
 
 The default public HTTPS panel port is `8443`; the VPN endpoint uses public TCP `443`. The panel's HTTP port `8080` is published only on `127.0.0.1` for local checks or an SSH tunnel. A successful HTTP health check confirms the panel is responding; test public HTTPS and a VPN client separately. After enabling Secure cookies, sign in through HTTPS.
 
-If `endpoint` keeps restarting, check the TOML files, certificate paths and whether another service occupies the public VPN port. The TrustTunnel process log is shown in the panel's **Log (Журнал)** page. For HTTPS proxy errors, also inspect nginx:
+If `endpoint` keeps restarting, check the TOML files, certificate paths and whether another service occupies the public VPN port. The TrustTunnel process log is shown on the panel's **Logs** page. Log entries and endpoint diagnostics retain their original language regardless of the interface language. For HTTPS proxy errors, also inspect nginx:
 
 ```sh
 docker compose -f deploy/compose.yml --profile https logs --tail=100 https

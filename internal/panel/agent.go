@@ -54,7 +54,7 @@ func (c *agentClient) call(ctx context.Context, method, path string, input, outp
 	req.Header.Set("Content-Type", "application/json")
 	res, err := c.http.Do(req)
 	if err != nil {
-		return errors.New("Сервис управления TrustTunnel недоступен.")
+		return uiError("error.agent_unavailable")
 	}
 
 	defer res.Body.Close()
@@ -65,7 +65,7 @@ func (c *agentClient) call(ctx context.Context, method, path string, input, outp
 			return errors.New(e.Error)
 		}
 
-		return errors.New("Не удалось выполнить операцию с TrustTunnel.")
+		return uiError("error.agent_operation")
 	}
 
 	if output == nil {
@@ -74,7 +74,7 @@ func (c *agentClient) call(ctx context.Context, method, path string, input, outp
 	}
 
 	if err := json.NewDecoder(r).Decode(output); err != nil {
-		return errors.New("Некорректный ответ сервиса управления.")
+		return uiError("error.agent_response")
 	}
 
 	return nil
