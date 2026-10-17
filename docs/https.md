@@ -67,6 +67,8 @@ Interactive SSH environment variables are not a persistent configuration for aut
 
 Back up an existing target hook, then install and manually test the new one:
 
+For an update, use the existing hook's installed filename in the commands below (for example, `trusttunnel.sh` instead of `tunnelapanel.sh`). Leaving an old hook alongside the new one makes Certbot run both. Keep backup copies outside the deploy-hook directory.
+
 ```sh
 install -d /etc/letsencrypt/renewal-hooks/deploy
 hook_backup=$(mktemp -d /root/tunnelapanel-hook.XXXXXX)
@@ -78,5 +80,7 @@ install -m 755 deploy/certbot-deploy-hook.sh /etc/letsencrypt/renewal-hooks/depl
 ```
 
 The hook filters Certbot renewals by lineage, sends HUP to the running endpoint, and validates/reloads nginx if it is running. Before migration or after rollback, it instead restarts an active native `trusttunnel` service without starting a stopped one. A failure is reported to Certbot.
+
+Reloads run inside the containers with `exec`. Do not replace them with `docker kill` or `docker compose kill`: even a non-terminating SIGHUP [can disable automatic startup after a reboot](https://github.com/moby/moby/issues/47792) with `restart: unless-stopped`. If you installed an older hook using `compose kill`, replace the installed copy too and follow the [recovery steps](operations.md#after-a-server-reboot).
 
 Verify the host's automatic Certbot renewal schedule, endpoint logs, and the certificate served by fresh TLS connections on both enabled ports. Preserve the existing ACME challenge method and access needed for renewal. Back up your edited nginx configuration and hook before updates; see [operations](./operations.md).

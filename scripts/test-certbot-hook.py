@@ -23,12 +23,16 @@ if tool == "docker":
     if args[:5] != prefix:
         raise SystemExit("Unexpected Compose invocation: " + repr(args))
     command = tuple(args[5:])
+    # Docker's kill API changes restart eligibility even for non-terminating HUP.
+    # Reject it so TLS reloads cannot reintroduce the reboot regression.
+    if "kill" in command:
+        raise SystemExit("Docker kill can disable unless-stopped restarts")
     events = {
         ("ps", "--status", "running", "--quiet", "endpoint"): "inspect_endpoint",
         ("--profile", "https", "ps", "--status", "running", "--quiet", "https"): "inspect_https",
-        ("kill", "--signal", "SIGHUP", "endpoint"): "reload_endpoint",
+        ("exec", "-T", "endpoint", "/bin/sh", "-c", "kill -HUP 1"): "reload_endpoint",
         ("--profile", "https", "exec", "-T", "https", "nginx", "-t"): "check_nginx",
-        ("--profile", "https", "kill", "--signal", "SIGHUP", "https"): "reload_nginx",
+        ("--profile", "https", "exec", "-T", "https", "nginx", "-s", "reload"): "reload_nginx",
     }
     event = events.get(command)
 elif tool == "systemctl" and args == ["try-restart", "trusttunnel"]:
@@ -78,7 +82,7 @@ class CertbotHookTests(unittest.TestCase):
             events = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
             return result, events
 
-    def test_reloads_both_consumers(self):
+    def test_reloads_both_consumers_without_docker_kill(self):
         result, events = self.run_hook()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(events, ["inspect_endpoint", "inspect_https", "reload_endpoint",
@@ -122,6 +126,13 @@ class CertbotHookTests(unittest.TestCase):
         self.assertIn("check_nginx", events)
         self.assertIn("reload_nginx", events)
         self.assertNotIn("restart_native", events)
+
+    def test_nginx_reload_failure_is_visible(self):
+        result, events = self.run_hook({"reload_nginx": {"status": 1, "stderr": "nginx reload failed\n"}})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("nginx reload failed", result.stderr)
+        self.assertIn("reload_endpoint", events)
+        self.assertIn("reload_nginx", events)
 
     def test_docker_inspection_failure_is_visible(self):
         for event in ("inspect_endpoint", "inspect_https"):

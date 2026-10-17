@@ -62,6 +62,24 @@ docker compose -f deploy/compose.yml --profile https logs --tail=100 https
 
 After migration, manage users through the panel. External changes to `credentials.toml` block applying edits, and a mismatch with saved state prevents agent startup. Identify the external change before choosing a recovery snapshot.
 
+## After a server reboot
+
+All services use `restart: unless-stopped`; Docker normally starts them again after a reboot, except containers explicitly stopped by an administrator. Check all containers, including stopped ones:
+
+```sh
+docker compose -f deploy/compose.yml --profile https ps -a
+```
+
+An older Certbot hook used `compose kill --signal SIGHUP`. Docker can mark a container as manually stopped even though that signal only reloads its certificate. This prevents the endpoint and HTTPS proxy from starting after a reboot. Replace the [installed hook](https.md#certificate-renewal), preserving your certificate lineage, then start the existing stopped containers to clear the flag:
+
+```sh
+docker compose -f deploy/compose.yml start endpoint panel
+# If the HTTPS proxy is installed:
+docker compose -f deploy/compose.yml --profile https start https
+```
+
+These commands preserve configuration and credentials and leave running containers running. Check public HTTPS and an authenticated VPN connection afterward. A responding panel alone does not confirm that the VPN or HTTPS proxy is running.
+
 ## Restore configuration and agent state
 
 The agent keeps state in memory, and TrustTunnel loads credentials at startup. Restoring files requires stopping both services and interrupts VPN connections:

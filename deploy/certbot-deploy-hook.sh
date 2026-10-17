@@ -27,7 +27,9 @@ fi
 result=0
 if [ -n "$endpoint_id" ]; then
     # endpoint-agent PID 1 forwards HUP for TLS-only reload.
-    compose kill --signal SIGHUP endpoint || result=1
+    # Signal inside the container: Docker kill marks it manually stopped and
+    # prevents unless-stopped from bringing it back after a daemon restart.
+    compose exec -T endpoint /bin/sh -c 'kill -HUP 1' || result=1
 else
     # Do not start an intentionally stopped native instance.
     systemctl try-restart trusttunnel || result=1
@@ -36,7 +38,7 @@ fi
 if [ -n "$https_id" ]; then
     # Check renewed certificate/key readability before gracefully reloading nginx.
     if compose --profile https exec -T https nginx -t; then
-        compose --profile https kill --signal SIGHUP https || result=1
+        compose --profile https exec -T https nginx -s reload || result=1
     else
         result=1
     fi
