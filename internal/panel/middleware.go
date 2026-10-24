@@ -23,6 +23,11 @@ func (s *Server) security(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		// Secure cookies mean the panel is served over HTTPS. Browsers ignore
+		// this header on plain HTTP, such as an SSH tunnel to 127.0.0.1.
+		if s.config.SecureCookie {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
+		}
 
 		// The allowlist matches hostnames without ports; loopback hosts are always allowed.
 		host := r.Host
@@ -72,7 +77,7 @@ func sameToken(a, b string) bool {
 // security must run first so the request body is bounded and PostForm is populated.
 func (s *Server) protect(fn func(http.ResponseWriter, *http.Request, session)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("tp_session")
+		cookie, err := r.Cookie(s.cookieName("tp_session"))
 		if err != nil {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return

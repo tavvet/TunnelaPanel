@@ -7,7 +7,9 @@ services:
       context: ..
       dockerfile: deploy/panel.Dockerfile
     restart: unless-stopped
-    user: "0:0"
+    # The web-facing panel needs no root access. runtime/panel must be owned by
+    # this UID, and the agent shares the GID to grant access to its socket.
+    user: "10001:10001"
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     read_only: true
@@ -25,8 +27,9 @@ services:
       - control:/run/tunnelapanel
     depends_on:
       - endpoint
+    # Keep the panel off the endpoint's network: VPN client traffic leaves from
+    # the endpoint container and must not reach the panel by service name.
     networks:
-      - default
       - panel_proxy
     logging:
       driver: json-file
@@ -53,7 +56,10 @@ services:
       - "${PANEL_HTTPS_BIND_IP:-0.0.0.0}:${PANEL_HTTPS_PORT:-8443}:8443/tcp"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
+      # Only the panel's certificate lineage, not every key on the host. It is
+      # the VPN lineage unless PANEL_CERT_NAME names a separate one.
+      - /etc/letsencrypt/live/${PANEL_CERT_NAME:-${TT_CERT_NAME:?set TT_CERT_NAME in deploy/.env}}:/etc/letsencrypt/live/${PANEL_CERT_NAME:-${TT_CERT_NAME}}:ro
+      - /etc/letsencrypt/archive/${PANEL_CERT_NAME:-${TT_CERT_NAME}}:/etc/letsencrypt/archive/${PANEL_CERT_NAME:-${TT_CERT_NAME}}:ro
     networks:
       panel_proxy:
         ipv4_address: "${PANEL_PROXY_IP:-172.30.80.3}"
@@ -71,7 +77,9 @@ services:
       context: ..
       dockerfile: deploy/endpoint.Dockerfile
     restart: unless-stopped
-    user: "0:0"
+    # Root reads the root-only Let's Encrypt keys. The panel's GID becomes the
+    # control socket's group, so the non-root panel can connect to it.
+    user: "0:10001"
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     read_only: true
@@ -88,8 +96,11 @@ services:
     volumes:
       - ../runtime/config:/data/config
       - ../runtime/state:/data/state
-      # Mount the whole tree: live/ certificates link into archive/.
-      - /etc/letsencrypt:/etc/letsencrypt:ro
+      # Mount one lineage at its original paths: live/ links into archive/.
+      # Other certificates and keys on the host stay out of this container; the
+      # agent refuses to start if hosts.toml references a file outside it.
+      - /etc/letsencrypt/live/${TT_CERT_NAME:?set TT_CERT_NAME in deploy/.env}:/etc/letsencrypt/live/${TT_CERT_NAME}:ro
+      - /etc/letsencrypt/archive/${TT_CERT_NAME}:/etc/letsencrypt/archive/${TT_CERT_NAME}:ro
       - control:/run/tunnelapanel
     stop_grace_period: 20s
     logging:

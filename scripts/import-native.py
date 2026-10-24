@@ -29,14 +29,25 @@ def main():
         raise SystemExit("Custom rules path requires explicit migration review.")
     if "metrics" in vpn:
         raise SystemExit("Existing metrics settings require explicit migration review.")
+    # VPN traffic leaves from the endpoint container; private destinations would
+    # include the Docker network and the endpoint's loopback metrics listener.
+    if vpn.get("allow_private_network_connections", False) is not False:
+        raise SystemExit("allow_private_network_connections must be false for this deployment.")
+    lineages = set()
     for entries in hosts.values():
         if not isinstance(entries, list):
             continue
         for host in entries:
             for key in ("cert_chain_path", "private_key_path"):
                 cert_path = Path(host.get(key, ""))
-                if not str(cert_path).startswith("/etc/letsencrypt/") or not cert_path.is_file():
-                    raise SystemExit("Certificate must exist under the mounted /etc/letsencrypt tree.")
+                parts = cert_path.parts
+                # Compose mounts one lineage: /etc/letsencrypt/{live,archive}/<name>.
+                if (len(parts) != 6 or parts[:4] != ("/", "etc", "letsencrypt", "live")
+                        or not cert_path.is_file()):
+                    raise SystemExit("Certificate must exist under /etc/letsencrypt/live/<name>/.")
+                lineages.add(parts[4])
+    if len(lineages) != 1:
+        raise SystemExit("All certificates must use one Let's Encrypt lineage; review multiple lineages manually.")
     credentials = (source / "credentials.toml").read_bytes()
     if not tomllib.loads(credentials.decode()).get("client"):
         raise SystemExit("No users found; refusing an unauthenticated endpoint.")
@@ -66,6 +77,7 @@ def main():
         if staged.exists():
             shutil.rmtree(staged)
     print("Imported configuration; original credential bytes and TLS paths preserved.")
+    print("Set TT_CERT_NAME=" + lineages.pop() + " in deploy/.env.")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"context"
 	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
@@ -8,13 +9,43 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 )
 
-const passwordIterations = 600000
+const (
+	passwordIterations = 600000
+
+	// Each client key gets loginAttempts tries per loginWindow. The table is
+	// bounded; when full, the oldest key that still has tries left is evicted,
+	// so exhausted keys stay blocked and rotating keys gains no extra tries.
+	loginAttempts    = 10
+	loginWindow      = 15 * time.Minute
+	maxLoginAttempts = 4096
+
+	// loginHashSlots bounds concurrent PBKDF2 derivations so a login flood
+	// cannot take every CPU core from the VPN endpoint on the same host; with
+	// the reserved slot below, at most loginHashSlots+1 run at once.
+	// Every attempt, including an oversized password, is counted while a slot
+	// is held and costs one derivation, which also caps how fast the attempt
+	// table can fill with exhausted keys.
+	loginHashSlots = 2
+	loginHashWait  = 3 * time.Second
+
+	// One extra slot is reserved for keys that signed in successfully before,
+	// so a flood from many fresh addresses cannot starve the administrator.
+	// Only a correct password adds a key, so attackers cannot claim it.
+	maxTrustedKeys = 16
+	trustedFor     = 30 * 24 * time.Hour
+
+	// Refused logins are audited at most once per key and window, and refusals
+	// without a key entry at most once per refusalReportEvery, so a flood
+	// cannot push earlier records out of the rotated audit log.
+	refusalReportEvery = time.Minute
+)
 
 type authFile struct {
 	Username string `json:"username"`
@@ -27,9 +58,18 @@ type session struct {
 	Expires time.Time
 }
 
+// refusal names a kind of refused login; the value is its audit action.
+type refusal string
+
+const (
+	refusalRateLimited refusal = "login_rate_limited"
+	refusalBusy        refusal = "login_busy"
+)
+
 type attempt struct {
-	Count int
-	Until time.Time
+	Count    int
+	Until    time.Time
+	Reported bool
 }
 
 // auth keeps credentials on disk, but sessions and rate limits only in memory.
@@ -40,6 +80,26 @@ type auth struct {
 	dir      string
 	sessions map[string]session
 	attempts map[string]attempt
+
+	hashSlots    chan struct{}
+	reservedSlot chan struct{}
+	trusted      map[string]time.Time
+	// lastReport holds the last unkeyed refusal audit time per refusal kind.
+	lastReport map[refusal]time.Time
+}
+
+// newAuthState creates the in-memory sessions, limits and hashing slots;
+// newAuth adds the persisted credentials.
+func newAuthState() *auth {
+	return &auth{
+		sessions:  make(map[string]session),
+		attempts:  make(map[string]attempt),
+		hashSlots: make(chan struct{}, loginHashSlots),
+		// One slot, available only to trusted keys.
+		reservedSlot: make(chan struct{}, 1),
+		trusted:      make(map[string]time.Time),
+		lastReport:   make(map[refusal]time.Time),
+	}
 }
 
 func randomToken() string {
@@ -113,11 +173,8 @@ func newAuth(dir string) (*auth, error) {
 		return nil, err
 	}
 
-	a := &auth{
-		dir:      dir,
-		sessions: make(map[string]session),
-		attempts: make(map[string]attempt),
-	}
+	a := newAuthState()
+	a.dir = dir
 
 	b, err := os.ReadFile(filepath.Join(dir, "auth.json"))
 	if err == nil {
@@ -180,16 +237,128 @@ func (a *auth) check(username, password string) bool {
 
 func (a *auth) checkLocked(username, password string) bool {
 	hash, err := passwordHash(password, a.file.Salt)
-	return err == nil && subtle.ConstantTimeCompare([]byte(hash), []byte(a.file.Hash)) == 1 && username == a.file.Username
+	return err == nil && a.file.matches(username, hash)
 }
 
-// authenticate holds the lock across the credential check and session creation.
-// A concurrent password change cannot leave a new session using old credentials.
-func (a *auth) authenticate(username, password string, now time.Time) (string, bool) {
+// matches compares an already derived hash in constant time.
+func (f authFile) matches(username, hash string) bool {
+	return subtle.ConstantTimeCompare([]byte(hash), []byte(f.Hash)) == 1 && username == f.Username
+}
+
+// acquireLoginSlot waits briefly for a hashing slot; false means the server is
+// busy or the client went away. A trusted key may also use the reserved slot.
+// The returned function releases whichever slot was taken; call it once.
+func (a *auth) acquireLoginSlot(ctx context.Context, key string, wait time.Duration) (func(), bool) {
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+
+	// A nil channel never becomes ready, which disables the reserved case.
+	var reserved chan struct{}
+	if a.isTrusted(key, time.Now()) {
+		reserved = a.reservedSlot
+	}
+
+	select {
+	case a.hashSlots <- struct{}{}:
+		return func() { <-a.hashSlots }, true
+	case reserved <- struct{}{}:
+		return func() { <-reserved }, true
+	case <-timer.C:
+		return nil, false
+	case <-ctx.Done():
+		return nil, false
+	}
+}
+
+func (a *auth) isTrusted(key string, now time.Time) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if !a.checkLocked(username, password) {
+	since, ok := a.trusted[key]
+	return ok && now.Sub(since) < trustedFor
+}
+
+// rejectSlowly spends the work of checking a wrong password, so an attempt
+// that cannot match costs as much as any other and gains nothing.
+func (a *auth) rejectSlowly() {
+	a.mu.Lock()
+	salt := a.file.Salt
+	a.mu.Unlock()
+
+	_, _ = passwordHash("", salt)
+}
+
+// loginSucceeded resets the key's limit and trusts it for the reserved slot.
+func (a *auth) loginSucceeded(key string, now time.Time) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	delete(a.attempts, key)
+	for k, since := range a.trusted {
+		if now.Sub(since) >= trustedFor {
+			delete(a.trusted, k)
+		}
+	}
+
+	if _, ok := a.trusted[key]; !ok && len(a.trusted) >= maxTrustedKeys {
+		var oldest string
+		var at time.Time
+		for k, since := range a.trusted {
+			if at.IsZero() || since.Before(at) {
+				oldest, at = k, since
+			}
+		}
+
+		delete(a.trusted, oldest)
+	}
+
+	a.trusted[key] = now
+}
+
+// reportRefusal says whether a refused login should be audited: once per key
+// and window while the key has an entry, otherwise once per kind and
+// refusalReportEvery.
+func (a *auth) reportRefusal(kind refusal, key string, now time.Time) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if v, ok := a.attempts[key]; ok && kind == refusalRateLimited {
+		if v.Reported {
+			return false
+		}
+
+		v.Reported = true
+		a.attempts[key] = v
+		return true
+	}
+
+	if now.Sub(a.lastReport[kind]) < refusalReportEvery {
+		return false
+	}
+
+	a.lastReport[kind] = now
+	return true
+}
+
+// authenticate derives the password hash without holding the lock, so slow
+// login attempts do not stall session lookups for signed-in requests. The
+// credentials are compared and the session created under the lock, and only if
+// the hashed snapshot is still current: a concurrent password change cannot
+// leave a new session using old credentials.
+func (a *auth) authenticate(username, password string, now time.Time) (string, bool) {
+	a.mu.Lock()
+	file := a.file
+	a.mu.Unlock()
+
+	hash, err := passwordHash(password, file.Salt)
+	if err != nil {
+		return "", false
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.file != file || !file.matches(username, hash) {
 		return "", false
 	}
 
@@ -197,35 +366,79 @@ func (a *auth) authenticate(username, password string, now time.Time) (string, b
 	return id, true
 }
 
-func (a *auth) allowAttempt(ip string, now time.Time) bool {
+// rateLimitKey groups IPv6 clients by /64, the smallest prefix normally
+// assigned to one site, so rotating addresses inside it gives no extra tries.
+func rateLimitKey(ip string) string {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil || !addr.Is6() || addr.Is4In6() {
+		return ip
+	}
+
+	prefix, err := addr.Prefix(64)
+	if err != nil {
+		return ip
+	}
+
+	return prefix.String()
+}
+
+// exhausted reports whether key has used all tries in its current window. It
+// lets the handler refuse such a key before waiting for a hashing slot.
+func (a *auth) exhausted(key string, now time.Time) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	for key, v := range a.attempts {
+	v, ok := a.attempts[key]
+	return ok && !now.After(v.Until) && v.Count >= loginAttempts
+}
+
+func (a *auth) allowAttempt(key string, now time.Time) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	for k, v := range a.attempts {
 		if now.After(v.Until) {
-			delete(a.attempts, key)
+			delete(a.attempts, k)
 		}
 	}
 
-	v := a.attempts[ip]
-	if v.Until.IsZero() {
-		v.Until = now.Add(15 * time.Minute)
+	v, ok := a.attempts[key]
+	if !ok {
+		if len(a.attempts) >= maxLoginAttempts && !a.evictOldestAttemptLocked() {
+			// Every key is exhausted; refuse rather than reset one of them.
+			return false
+		}
+
+		v.Until = now.Add(loginWindow)
 	}
 
-	if v.Count >= 10 || len(a.attempts) >= 4096 {
+	if v.Count >= loginAttempts {
 		return false
 	}
 
 	v.Count++
-	a.attempts[ip] = v
+	a.attempts[key] = v
 	return true
 }
 
-func (a *auth) clearAttempts(ip string) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
+// evictOldestAttemptLocked removes the earliest-expiring window that still has
+// tries left. Exhausted keys are never evicted, so an attacker cannot reset
+// its own limit by rotating through more keys than the table holds.
+func (a *auth) evictOldestAttemptLocked() bool {
+	var oldest string
+	var until time.Time
+	for k, v := range a.attempts {
+		if v.Count < loginAttempts && (until.IsZero() || v.Until.Before(until)) {
+			oldest, until = k, v.Until
+		}
+	}
 
-	delete(a.attempts, ip)
+	if until.IsZero() {
+		return false
+	}
+
+	delete(a.attempts, oldest)
+	return true
 }
 
 func (a *auth) createSession(now time.Time) (string, session) {

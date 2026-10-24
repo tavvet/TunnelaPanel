@@ -7,7 +7,7 @@
 - Linux-сервер (`amd64` или `arm64`) с доступом root. Развёртывание проверено на Ubuntu 24.04, `amd64`.
 - [Docker Engine с Compose](https://docs.docker.com/engine/install/ubuntu/) на сервере.
 - [Go 1.25 или новее](https://go.dev/doc/install) и Git на машине для сборки. Для сборки архива также нужен Bash.
-- Домен, направленный на сервер, и действующий TLS-сертификат. Готовая конфигурация монтирует `/etc/letsencrypt`; получение сертификата описано в шаге 2.
+- Домен, направленный на сервер, и действующий TLS-сертификат. Готовая конфигурация монтирует из `/etc/letsencrypt` только каталоги этого сертификата; получение сертификата описано в шаге 2.
 - Свободный TCP-порт для VPN, обычно `443`. Для публичной панели дополнительно нужен `8443/tcp`.
 - OpenSSL на сервере для новой конфигурации VPN или Python **3.11+** для переноса существующей установки. В проверках ниже используется `curl`.
 
@@ -62,9 +62,12 @@ cd /opt/tunnelapanel
 
 ```sh
 install -d -m 700 runtime runtime/state runtime/panel
+chown 10001:10001 runtime/panel
 cp deploy/env.example deploy/.env
 chmod 600 deploy/.env
 ```
+
+Контейнер панели работает от непривилегированного пользователя `10001`, поэтому `runtime/panel` должен принадлежать ему. Контейнер endpoint по-прежнему работает от root, чтобы читать закрытый ключ Let's Encrypt.
 
 Не создавайте `runtime/config` до выбора способа настройки в шаге 3. Сам TrustTunnel загрузится при сборке Docker-образа; версия и SHA-256 архива закреплены в [Dockerfile](../deploy/endpoint.Dockerfile).
 
@@ -86,7 +89,7 @@ certbot certonly --standalone -d vpn.example.com
 certbot certificates
 ```
 
-Понадобятся `fullchain.pem` и `privkey.pem`. Имя каталога сертификата может отличаться от домена. Compose монтирует весь `/etc/letsencrypt`, чтобы работали ссылки из `live/` в `archive/`.
+Понадобятся `fullchain.pem` и `privkey.pem`. Имя каталога сертификата может отличаться от домена; запомните его для `TT_CERT_NAME` в шаге 3. Compose монтирует только `live/<имя>` и `archive/<имя>` по исходным путям: ссылки из `live/` в `archive/` продолжают работать, а другие сертификаты и ключи сервера в контейнеры не попадают.
 
 ## 3. Задайте параметры развёртывания и настройте TrustTunnel
 
@@ -94,6 +97,7 @@ certbot certificates
 
 ```ini
 TT_PUBLIC_ADDRESS=vpn.example.com:443
+TT_CERT_NAME=vpn.example.com
 TT_BIND_IP=0.0.0.0
 TT_PORT=443
 PANEL_PORT=8080
@@ -102,7 +106,7 @@ PANEL_ALLOWED_HOSTS=
 PANEL_TRUSTED_PROXIES=
 ```
 
-`TT_PORT` — внешний порт VPN. Если меняете его, укажите тот же порт в `TT_PUBLIC_ADDRESS`. Внутренний адрес в `vpn.toml` остаётся `0.0.0.0:8443`.
+`TT_CERT_NAME` — имя каталога сертификата в `/etc/letsencrypt/live/` из шага 2. `TT_PORT` — внешний порт VPN. Если меняете его, укажите тот же порт в `TT_PUBLIC_ADDRESS`. Внутренний адрес в `vpn.toml` остаётся `0.0.0.0:8443`.
 
 Проверьте, что `PANEL_PROXY_SUBNET` из `.env` не пересекается с существующими Docker- и VPN-сетями. При необходимости измените подсеть и выберите `PANEL_PROXY_IP` внутри неё. Для первоначальной настройки оставьте опциональный профиль HTTPS выключенным.
 

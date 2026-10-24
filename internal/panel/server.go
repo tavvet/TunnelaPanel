@@ -2,11 +2,14 @@ package panel
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
 	"net/http"
+	"os"
 	"sync"
+	"time"
 )
 
 // Config defines persistent storage, agent access, and HTTP security settings.
@@ -29,6 +32,11 @@ type Server struct {
 	handler        http.Handler
 	auditMu        sync.Mutex
 	trustedProxies trustedProxyPolicy
+
+	// auditMu also guards the login_failed audit limit.
+	failedWindow     time.Time
+	failedCount      int
+	failedSuppressed int
 }
 
 // New validates configuration, loads or bootstraps admin credentials, and builds the routes.
@@ -41,12 +49,12 @@ func New(config Config) (*Server, error) {
 
 	settings, err := newPanelSettings(config.StateDir)
 	if err != nil {
-		return nil, err
+		return nil, stateDirError(config.StateDir, err)
 	}
 
 	a, err := newAuth(config.StateDir)
 	if err != nil {
-		return nil, err
+		return nil, stateDirError(config.StateDir, err)
 	}
 
 	t, err := newTemplates()
@@ -111,6 +119,15 @@ func New(config Config) (*Server, error) {
 
 	s.handler = s.security(mux)
 	return s, nil
+}
+
+// stateDirError explains the usual cause of a permission failure: a state
+// directory created by root before the panel started running as a regular user.
+func stateDirError(dir string, err error) error {
+	if errors.Is(err, fs.ErrPermission) {
+		return fmt.Errorf("%w; PANEL_STATE_DIR %s must be owned by the panel user (uid %d)", err, dir, os.Getuid())
+	}
+	return err
 }
 
 // ServeHTTP applies security checks and dispatches the request to a panel route.

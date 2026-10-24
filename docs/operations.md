@@ -12,6 +12,8 @@ A manual VPN restart uses the applied settings; it does not apply the draft. TLS
 
 Change the initial administrator password under **Settings → Administrator password** using **Change password**. A successful password change removes `runtime/panel/bootstrap-password` and invalidates existing sessions. Sessions are held in memory, so restarting the panel also requires signing in again. VPN user passwords and the administrator password are separate.
 
+Sign-in allows 10 attempts per client address every 15 minutes (IPv6 addresses are grouped by /64), and at most two password checks run at once, plus one slot reserved for addresses that signed in successfully within the last 30 days (kept in memory until the panel restarts); during a flood the panel answers that the server is busy. `audit.jsonl` records refused sign-ins as `login_rate_limited` and `login_busy`, at most once per address and window or once per minute. Failed sign-ins are recorded up to 60 per minute; the rest are counted in one `login_failed_suppressed` record. The log rotates at 2 MiB and keeps five older copies, `audit.jsonl.1` to `audit.jsonl.5`.
+
 The interface defaults to English. Choose Russian in **Settings → Interface → Language**; the saved choice applies to the whole panel, including login. Saving it does not restart TrustTunnel or change its draft. See [panel settings](panel-settings.md).
 
 ## Persistent data and backups
@@ -20,9 +22,9 @@ The interface defaults to English. Choose Russian in **Settings → Interface �
 | --- | --- |
 | `runtime/config/` | TrustTunnel settings, TLS paths and active VPN credentials |
 | `runtime/state/state.json` | Applied users and the draft, including passwords of disabled users |
-| `runtime/state/backups/` | Credentials and agent state saved before each apply |
+| `runtime/state/backups/` | Credentials and agent state saved before each apply; the 20 most recent are kept |
 | `runtime/state/apply.json` | Recovery journal during an apply; recovered automatically after an interrupted operation |
-| `runtime/panel/` | Administrator authentication data, initial password until changed, `settings.json` with the interface language, and `audit.jsonl` |
+| `runtime/panel/` | Administrator authentication data, initial password until changed, `settings.json` with the interface language, and `audit.jsonl` with up to five rotated copies |
 | `deploy/.env`, `deploy/nginx.conf`, `deploy/certbot-deploy-hook.sh` | Deployment settings and local customizations |
 | `/etc/letsencrypt/` | Certificates, private keys, renewal settings and installed deploy hooks |
 
@@ -44,6 +46,25 @@ curl --fail --retry 5 --retry-connrefused --retry-delay 1 http://127.0.0.1:8080/
 
 These commands recreate only the panel and leave VPN connections running. An endpoint or TrustTunnel update also requires rebuilding and recreating `endpoint`; schedule its brief VPN interruption. Review the release changes before choosing which services to update.
 
+### Upgrading to the hardened deployment
+
+Follow this section once if `deploy/.env` has no `TT_CERT_NAME`: the installation predates the deployment that runs the panel as the unprivileged user `10001`, mounts only one certificate lineage, and keeps the panel off the endpoint's Docker network. Before updating:
+
+```sh
+chown -R 10001:10001 runtime/panel
+```
+
+Add `TT_CERT_NAME` to `deploy/.env` with the directory name under `/etc/letsencrypt/live/` (see `certbot certificates`); Compose refuses to start without it. If the HTTPS panel uses a different certificate, also set `PANEL_CERT_NAME`. Check that every `cert_chain_path` and `private_key_path` in `runtime/config/hosts.toml` is inside `/etc/letsencrypt/live/<TT_CERT_NAME>/`: the agent refuses to start otherwise. The supplied Compose file mounts one lineage for the endpoint; add further mounts to `deploy/compose.yml` if it needs more. Reinstall the [Certbot hook](https.md#certificate-renewal): it now takes the lineage from `deploy/.env`. Then rebuild and recreate **all** services at once, because the agent creates the socket permissions the new panel needs. Schedule the brief VPN interruption:
+
+```sh
+docker compose -f deploy/compose.yml build
+docker compose -f deploy/compose.yml up -d
+# If the HTTPS proxy is installed:
+docker compose -f deploy/compose.yml --profile https up -d https
+```
+
+Sign in again afterwards. With Secure cookies, cookie names gain the `__Host-` prefix.
+
 ## Troubleshooting
 
 ```sh
@@ -53,6 +74,10 @@ curl --fail http://127.0.0.1:8080/healthz
 ```
 
 The default public HTTPS panel port is `8443`; the VPN endpoint uses public TCP `443`. The panel's HTTP port `8080` is published only on `127.0.0.1` for local checks or an SSH tunnel. A successful HTTP health check confirms the panel is responding; test public HTTPS and a VPN client separately. After enabling Secure cookies, sign in through HTTPS.
+
+If `endpoint` exits with `cannot open … from hosts.toml`, that certificate is not in the mounted lineage: correct `TT_CERT_NAME` or the path in `hosts.toml`.
+
+If `panel` exits with `must be owned by the panel user`, run `chown -R 10001:10001 runtime/panel` and start it again.
 
 If `endpoint` keeps restarting, check the TOML files, certificate paths and whether another service occupies the public VPN port. The TrustTunnel process log is shown on the panel's **Logs** page. Log entries and endpoint diagnostics retain their original language regardless of the interface language. For HTTPS proxy errors, also inspect nginx:
 

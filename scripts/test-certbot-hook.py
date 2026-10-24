@@ -51,7 +51,8 @@ raise SystemExit(behavior.get("status", 0))
 
 
 class CertbotHookTests(unittest.TestCase):
-    def run_hook(self, overrides=None, *, lineage=LINEAGE, docker=True, compose=True):
+    def run_hook(self, overrides=None, *, lineage=LINEAGE, docker=True, compose=True,
+                 env_lineage=True, dotenv=None):
         behavior = {
             "inspect_endpoint": {"stdout": "endpoint-id\n"},
             "inspect_https": {"stdout": "https-id\n"},
@@ -70,11 +71,16 @@ class CertbotHookTests(unittest.TestCase):
             if compose:
                 compose_file.parent.mkdir(parents=True)
                 compose_file.write_text("# fixture, never read by real Docker\n")
+            if dotenv is not None:
+                (panel / "deploy").mkdir(parents=True, exist_ok=True)
+                (panel / "deploy/.env").write_text(dotenv)
             log = root / "commands.jsonl"
             env = dict(os.environ, PATH=str(bindir), TT_CERT_LINEAGE=LINEAGE,
                        TT_PANEL_DIR=str(panel), MOCK_COMPOSE=str(compose_file),
                        MOCK_LOG=str(log), MOCK_BEHAVIOR=json.dumps(behavior))
             env.pop("RENEWED_LINEAGE", None)
+            if not env_lineage:
+                env.pop("TT_CERT_LINEAGE")
             if lineage is not None:
                 env["RENEWED_LINEAGE"] = lineage
             result = subprocess.run(["/bin/sh", str(HOOK)], env=env,
@@ -104,6 +110,32 @@ class CertbotHookTests(unittest.TestCase):
         result, events = self.run_hook(lineage="/etc/letsencrypt/live/unrelated.example")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(events, [])
+
+    def test_lineage_comes_from_compose_env(self):
+        dotenv = 'TT_PUBLIC_ADDRESS=vpn.test.example:443\nTT_CERT_NAME="test.example"\n'
+        result, events = self.run_hook(env_lineage=False, dotenv=dotenv)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("reload_endpoint", events)
+        result, events = self.run_hook(env_lineage=False, dotenv=dotenv,
+                                       lineage="/etc/letsencrypt/live/unrelated.example")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(events, [])
+
+    def test_env_parsing_matches_compose(self):
+        # Forms Compose accepts: quotes with a trailing comment, export, spaces.
+        for dotenv in ('TT_CERT_NAME="test.example" # VPN cert\n',
+                       "export TT_CERT_NAME=test.example\n",
+                       "  TT_CERT_NAME = test.example   # comment\r\n"):
+            with self.subTest(dotenv=dotenv):
+                result, events = self.run_hook(env_lineage=False, dotenv=dotenv)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("reload_endpoint", events)
+
+    def test_separate_panel_lineage_reloads_consumers(self):
+        dotenv = "TT_CERT_NAME=vpn.example\nPANEL_CERT_NAME=test.example\n"
+        result, events = self.run_hook(env_lineage=False, dotenv=dotenv)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("reload_nginx", events)
 
     def test_unset_lineage_permits_manual_smoke_test(self):
         result, events = self.run_hook(lineage=None)

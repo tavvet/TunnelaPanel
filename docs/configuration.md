@@ -47,7 +47,7 @@ address = "127.0.0.1:1987"
 per_client_metrics = true
 ```
 
-This configuration enables HTTP/1 and HTTP/2, with metrics available only inside the endpoint container. The supplied Compose file publishes TCP only, so leave QUIC/HTTP/3 disabled. IPv6 forwarding is disabled in this example.
+This configuration enables HTTP/1 and HTTP/2, with metrics available only inside the endpoint container. The supplied Compose file publishes TCP only, so leave QUIC/HTTP/3 disabled. IPv6 forwarding is disabled in this example. Keep `allow_private_network_connections = false`: otherwise VPN clients could reach private addresses from the endpoint container, including its loopback metrics listener.
 
 Create `runtime/config/hosts.toml`, replacing the domain and certificate paths with your own:
 
@@ -58,7 +58,7 @@ cert_chain_path = "/etc/letsencrypt/live/vpn.example.com/fullchain.pem"
 private_key_path = "/etc/letsencrypt/live/vpn.example.com/privkey.pem"
 ```
 
-Use the actual paths reported by `certbot certificates`; the certificate directory name may differ from the domain.
+Use the actual paths reported by `certbot certificates`; the certificate directory name may differ from the domain. All certificate and key paths must be inside `/etc/letsencrypt/live/<TT_CERT_NAME>/`: only that lineage is mounted, and the agent refuses to start if a file is missing.
 
 Create the first **VPN user** with a random password:
 
@@ -78,16 +78,17 @@ Back up the active configuration, certificates, and service definition. With Pyt
 python3 scripts/import-native.py --source /opt/trusttunnel --target runtime/config
 ```
 
-The target directory `runtime/config` **must not exist**. The importer leaves the original installation untouched, preserves user credential bytes and TLS paths, changes the internal listener to `0.0.0.0:8443`, and adds local per-user metrics.
+The target directory `runtime/config` **must not exist**. The importer leaves the original installation untouched, preserves user credential bytes and TLS paths, changes the internal listener to `0.0.0.0:8443`, and adds local per-user metrics. On success it prints the `TT_CERT_NAME` value to set in `deploy/.env`.
 
 The supported layout is `vpn.toml`, `hosts.toml`, `credentials.toml`, and an optional `rules.toml`. The importer stops if:
 
 - QUIC is enabled or a metrics section already exists.
 - Credentials or rules use paths other than the standard relative filenames or their absolute paths inside the source directory.
-- Certificate/key files are missing or outside `/etc/letsencrypt`.
+- `allow_private_network_connections` is not `false`. VPN traffic leaves from the endpoint container, so private destinations would include its Docker network and loopback metrics listener.
+- Certificate/key files are missing, are outside `/etc/letsencrypt/live/<name>/`, or come from more than one lineage.
 - There are no VPN users, or the listener/file settings cannot be updated unambiguously.
 
-These cases need manual adaptation. Preserve custom protocol options, filtering rules, and optional user connection limits. The endpoint must listen on `0.0.0.0:8443`; credentials must resolve inside `/data/config`; certificate paths must be accessible through the mounted `/etc/letsencrypt` tree. Configure metrics as in the new-server example above, without adding a duplicate section. See the [TrustTunnel 1.1.0 configuration reference](https://github.com/TrustTunnel/TrustTunnel/blob/v1.1.0/CONFIGURATION.md) for supported settings.
+These cases need manual adaptation. Preserve custom protocol options, filtering rules, and optional user connection limits. The endpoint must listen on `0.0.0.0:8443`; credentials must resolve inside `/data/config`; certificate paths must be inside the lineage mounted through `TT_CERT_NAME`. Configure metrics as in the new-server example above, without adding a duplicate section. See the [TrustTunnel 1.1.0 configuration reference](https://github.com/TrustTunnel/TrustTunnel/blob/v1.1.0/CONFIGURATION.md) for supported settings.
 
 TrustTunnel 1.1.0 has quote-sensitive credential parsing. Keep existing credential bytes during migration; changing TOML quote style can change the effective password.
 

@@ -10,6 +10,7 @@
   "error.request": "Invalid request",
   "error.csrf": "This form has expired. Refresh the page.",
   "error.login_refresh": "Refresh the sign-in page and try again.",
+  "error.login_busy": "The server is busy. Try signing in again in a few seconds.",
   "error.login_rate": "Too many attempts. Try again in 15 minutes.",
   "error.login_credentials": "Incorrect username or password.",
   "error.password_length": "Password must contain 12 to 128 characters.",

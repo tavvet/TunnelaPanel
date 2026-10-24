@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestProxyClientIP(t *testing.T) {
@@ -231,11 +232,20 @@ func TestProxyClientsHaveIndependentLoginLimitsAndAudit(t *testing.T) {
 		return w
 	}
 
-	// The rejected oversized password exercises the real login/rate-limit flow
-	// without performing ten unnecessary expensive password hashes.
-	for i := 0; i < 10; i++ {
-		if w := login("203.0.113.4", strings.Repeat("x", 129)); w.Code != http.StatusUnauthorized {
-			t.Fatalf("attempt %d: %d", i, w.Code)
+	// An oversized password can never match, but it still uses an attempt.
+	if w := login("203.0.113.4", strings.Repeat("x", 129)); w.Code != http.StatusUnauthorized {
+		t.Fatalf("oversized password: %d", w.Code)
+	}
+
+	// One real failure exercises the hashing path; the remaining tries are
+	// consumed directly to avoid eight unnecessary expensive password hashes.
+	if w := login("203.0.113.4", "invalid-password"); w.Code != http.StatusUnauthorized {
+		t.Fatalf("failed login: %d", w.Code)
+	}
+
+	for i := 2; i < loginAttempts; i++ {
+		if !s.auth.allowAttempt("203.0.113.4", time.Now()) {
+			t.Fatalf("attempt %d limited early", i)
 		}
 	}
 
@@ -258,7 +268,7 @@ func TestProxyClientsHaveIndependentLoginLimitsAndAudit(t *testing.T) {
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	if len(lines) != 11 {
+	if len(lines) != 4 {
 		t.Fatalf("audit entry count: %d", len(lines))
 	}
 
@@ -272,7 +282,10 @@ func TestProxyClientsHaveIndependentLoginLimitsAndAudit(t *testing.T) {
 		}
 
 		wantIP, wantAction := "203.0.113.4", "login_failed"
-		if i == 10 {
+		if i == 2 {
+			wantAction = "login_rate_limited"
+		}
+		if i == 3 {
 			wantIP, wantAction = "198.51.100.5", "login"
 		}
 

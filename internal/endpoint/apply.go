@@ -6,8 +6,67 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 )
+
+const (
+	// Each backup holds every password at that time, including those of users
+	// deleted later, so only the most recent ones are kept.
+	backupRetention = 20
+
+	// backupLayout names backups by UTC time. It has a fixed width, so names
+	// sort chronologically.
+	backupLayout = "20060102T150405.000000000Z"
+)
+
+func backupFileName(t time.Time) string {
+	return t.UTC().Format(backupLayout) + ".json"
+}
+
+func isBackupFileName(name string) bool {
+	stamp, ok := strings.CutSuffix(name, ".json")
+	if !ok {
+		return false
+	}
+	t, err := time.Parse(backupLayout, stamp)
+	// Round-tripping rejects names that parse but are not in canonical form.
+	return err == nil && backupFileName(t) == name
+}
+
+// pruneBackups deletes the oldest automatic backups so that keep remain,
+// counting current. current, the backup just written, is never deleted: after
+// the clock moves backwards its name can sort before older backups. Other
+// files are left untouched.
+func pruneBackups(dir string, keep int, current string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	var names []string
+	for _, e := range entries {
+		if !e.Type().IsRegular() || !isBackupFileName(e.Name()) {
+			continue
+		}
+		if e.Name() == current {
+			keep--
+			continue
+		}
+		names = append(names, e.Name())
+	}
+	keep = max(keep, 0)
+	if len(names) <= keep {
+		return nil
+	}
+	sort.Strings(names)
+	for _, name := range names[:len(names)-keep] {
+		if err := os.Remove(filepath.Join(dir, name)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // transaction captures the exact pre-apply files for backups and crash recovery.
 // Both payloads contain credentials and must remain private.
@@ -68,13 +127,19 @@ func (a *Agent) apply(ctx context.Context) error {
 	if os.MkdirAll(backupDir, 0700) != nil {
 		return errors.New("cannot create backup directory")
 	}
-	backup := filepath.Join(backupDir, time.Now().UTC().Format("20060102T150405.000000000Z")+".json")
+	backupName := backupFileName(time.Now())
+	backup := filepath.Join(backupDir, backupName)
 	tx, err := json.Marshal(transaction{Credentials: oldBytes, State: oldState})
 	if err != nil {
 		return errors.New("cannot prepare backup")
 	}
 	if atomicWrite(backup, tx) != nil {
 		return errors.New("cannot save credentials backup")
+	}
+	// Prune on every attempt, including ones that fail later: each attempt
+	// adds a backup. The one just written is always kept.
+	if pruneBackups(backupDir, backupRetention, backupName) != nil {
+		_, _ = a.logs.Write([]byte("[agent] Cannot remove old credentials backups\n"))
 	}
 	// Write the recovery journal before touching active credentials. A journal
 	// left on disk tells the next startup to restore the original file pair.

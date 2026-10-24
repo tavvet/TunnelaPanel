@@ -231,6 +231,10 @@ func (s *store) change(method string, c protocol.UserChange) error {
 		if idx >= 0 {
 			return errors.New("user already exists")
 		}
+		// Export passes the name to TrustTunnel as a command-line value.
+		if strings.HasPrefix(c.Username, "-") {
+			return errors.New("username must not start with -")
+		}
 		if !validPassword(c.Password) {
 			return errors.New("a valid password is required")
 		}

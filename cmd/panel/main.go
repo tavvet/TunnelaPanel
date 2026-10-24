@@ -24,18 +24,24 @@ func env(key, fallback string) string {
 }
 
 func main() {
-	app, err := panel.New(panel.Config{
-		StateDir:     env("PANEL_STATE_DIR", "/data/panel"),
-		Socket:       env("TT_SOCKET", "/run/tunnelapanel/control.sock"),
-		SecureCookie: os.Getenv("PANEL_COOKIE_SECURE") == "true",
-		AllowedHosts: strings.FieldsFunc(os.Getenv("PANEL_ALLOWED_HOSTS"), func(r rune) bool {
-			return r == ',' || r == ' '
-		}),
-		TrustedProxies: strings.FieldsFunc(os.Getenv("PANEL_TRUSTED_PROXIES"), func(r rune) bool {
-			return r == ',' || r == ' '
-		}),
-		Version: version,
-	})
+	split := func(r rune) bool {
+		return r == ',' || r == ' '
+	}
+	config := panel.Config{
+		StateDir:       env("PANEL_STATE_DIR", "/data/panel"),
+		Socket:         env("TT_SOCKET", "/run/tunnelapanel/control.sock"),
+		SecureCookie:   os.Getenv("PANEL_COOKIE_SECURE") == "true",
+		AllowedHosts:   strings.FieldsFunc(os.Getenv("PANEL_ALLOWED_HOSTS"), split),
+		TrustedProxies: strings.FieldsFunc(os.Getenv("PANEL_TRUSTED_PROXIES"), split),
+		Version:        version,
+	}
+	// Behind a reverse proxy without a trusted address, every client shares the
+	// proxy's IP, so one client's failed logins would block everyone else.
+	if len(config.AllowedHosts) > 0 && len(config.TrustedProxies) == 0 {
+		log.Print("warning: PANEL_ALLOWED_HOSTS is set but PANEL_TRUSTED_PROXIES is empty; behind a reverse proxy all clients share one login rate limit")
+	}
+
+	app, err := panel.New(config)
 	if err != nil {
 		log.Fatal(err)
 	}

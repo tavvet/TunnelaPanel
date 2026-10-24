@@ -199,6 +199,11 @@ func (p *supervisor) reload() error {
 
 // Export stdout contains credentials, so neither stdout nor stderr is logged.
 func (p *supervisor) export(ctx context.Context, user string) (protocol.Export, error) {
+	// Names from an imported credentials file are not otherwise validated; one
+	// starting with "-" would be parsed as an option rather than as the -c value.
+	if user == "" || strings.HasPrefix(user, "-") {
+		return protocol.Export{}, errors.New("this username cannot be exported safely")
+	}
 	out := protocol.Export{Username: user}
 	for _, format := range []string{"toml", "deeplink"} {
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)

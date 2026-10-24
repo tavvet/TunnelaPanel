@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -52,6 +53,42 @@ func (a *Agent) certificates() ([]protocol.Certificate, error) {
 		}
 	}
 	return out, nil
+}
+
+// checkCertificateFiles verifies that every certificate and key referenced by
+// hosts.toml can be opened. The container sees only the mounted lineage, so a
+// file from another lineage fails here with a clear cause instead of as an
+// endpoint startup or TLS reload error. Like the importer, it checks every
+// host list, not only main and fallback hosts.
+func checkCertificateFiles(configDir string) error {
+	doc, _, err := readTOML(filepath.Join(configDir, "hosts.toml"))
+	if err != nil {
+		return err
+	}
+	for _, value := range doc {
+		hosts, _ := value.([]any)
+		for _, entry := range hosts {
+			h, ok := entry.(map[string]any)
+			if !ok {
+				continue
+			}
+			for _, field := range []string{"cert_chain_path", "private_key_path"} {
+				path, _ := h[field].(string)
+				if path == "" {
+					continue
+				}
+				if !filepath.IsAbs(path) {
+					path = filepath.Join(configDir, path)
+				}
+				f, err := os.Open(path)
+				if err != nil {
+					return fmt.Errorf("cannot open %s from hosts.toml; certificates must belong to the lineage mounted through TT_CERT_NAME", path)
+				}
+				f.Close()
+			}
+		}
+	}
+	return nil
 }
 
 // reloadTLS checks main-host certificate/key pairs before requesting SIGHUP.

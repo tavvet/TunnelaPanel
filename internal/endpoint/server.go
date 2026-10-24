@@ -41,6 +41,7 @@ func decodeChange(w http.ResponseWriter, r *http.Request) (protocol.UserChange, 
 
 // Handler exposes the private control API. Serve restricts access through Unix
 // socket permissions; the handler itself does not authenticate HTTP clients.
+// The socket's owner and the agent's primary group may connect; others may not.
 func (a *Agent) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/healthz" && r.Method == http.MethodGet {
@@ -168,11 +169,15 @@ func (a *Agent) Serve(ctx context.Context) error {
 	defer stopMonitor()
 	go a.monitor(monitorCtx)
 
+	// The panel runs as a different user in the agent's primary group. Grant that
+	// group directory search and socket access only; the owner needs no capability
+	// to change a file's group to one of its own groups.
 	dir := filepath.Dir(a.config.Socket)
+	gid := os.Getegid()
 	if os.MkdirAll(dir, 0700) != nil {
 		return errors.New("cannot create control socket directory")
 	}
-	if os.Chmod(dir, 0700) != nil {
+	if os.Chown(dir, -1, gid) != nil || os.Chmod(dir, 0710) != nil {
 		return errors.New("cannot secure control socket directory")
 	}
 	if info, err := os.Lstat(a.config.Socket); err == nil {
@@ -197,7 +202,7 @@ func (a *Agent) Serve(ctx context.Context) error {
 	}
 	defer listener.Close()
 	defer os.Remove(a.config.Socket)
-	if os.Chmod(a.config.Socket, 0600) != nil {
+	if os.Chown(a.config.Socket, -1, gid) != nil || os.Chmod(a.config.Socket, 0660) != nil {
 		return errors.New("cannot secure control socket")
 	}
 

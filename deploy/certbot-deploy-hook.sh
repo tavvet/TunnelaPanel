@@ -2,12 +2,61 @@
 # Certbot deploy hook: reload TrustTunnel and the optional HTTPS panel proxy.
 set -eu
 
-lineage=${TT_CERT_LINEAGE:-/etc/letsencrypt/live/vpn.example.com}
 panel_dir=${TT_PANEL_DIR:-/opt/tunnelapanel}
+
+# Read the last KEY=value setting from deploy/.env with shell builtins only,
+# following Compose's .env rules: an optional "export" prefix, whitespace
+# around the key and value, quoted values, and " #" comments after unquoted
+# values. Quoted values are taken up to the closing quote.
+env_value() {
+    value=
+    cr=$(printf '\r')
+    if [ -r "$panel_dir/deploy/.env" ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+            line=${line%"$cr"}
+            line=${line#"${line%%[![:space:]]*}"}
+            case $line in
+                export[[:space:]]*) line=${line#export}; line=${line#"${line%%[![:space:]]*}"} ;;
+            esac
+            case $line in
+                *=*) ;;
+                *) continue ;;
+            esac
+            key=${line%%=*}
+            key=${key%"${key##*[![:space:]]}"}
+            [ "$key" = "$1" ] || continue
+            rest=${line#*=}
+            rest=${rest#"${rest%%[![:space:]]*}"}
+            case $rest in
+                \"*) rest=${rest#\"}; value=${rest%%\"*} ;;
+                \'*) rest=${rest#\'}; value=${rest%%\'*} ;;
+                \#*) value= ;;
+                *)
+                    value=${rest%%[[:space:]]#*}
+                    value=${value%"${value##*[![:space:]]}"}
+                    ;;
+            esac
+        done < "$panel_dir/deploy/.env"
+    fi
+    printf '%s' "$value"
+}
+
+# Use the lineages Compose mounts, so this hook cannot drift from deploy/.env.
+# An explicit TT_CERT_LINEAGE still overrides them.
+if [ -n "${TT_CERT_LINEAGE:-}" ]; then
+    vpn_lineage=$TT_CERT_LINEAGE
+    panel_lineage=
+else
+    cert_name=$(env_value TT_CERT_NAME)
+    panel_cert_name=$(env_value PANEL_CERT_NAME)
+    vpn_lineage="/etc/letsencrypt/live/${cert_name:-vpn.example.com}"
+    panel_lineage=${panel_cert_name:+/etc/letsencrypt/live/$panel_cert_name}
+fi
 
 # Certbot runs global deploy hooks for every renewed certificate. Ignore others.
 # An unset RENEWED_LINEAGE permits an administrator's manual smoke test.
-if [ -n "${RENEWED_LINEAGE:-}" ] && [ "$RENEWED_LINEAGE" != "$lineage" ]; then
+if [ -n "${RENEWED_LINEAGE:-}" ] && [ "$RENEWED_LINEAGE" != "$vpn_lineage" ] &&
+    { [ -z "$panel_lineage" ] || [ "$RENEWED_LINEAGE" != "$panel_lineage" ]; }; then
     exit 0
 fi
 

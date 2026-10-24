@@ -7,7 +7,7 @@
 - A Linux server (`amd64` or `arm64`) with root access. Deployment has been tested on Ubuntu 24.04, `amd64`.
 - [Docker Engine with Compose](https://docs.docker.com/engine/install/ubuntu/) on the server.
 - [Go 1.25 or newer](https://go.dev/doc/install) and Git on the build machine. Building a release archive also requires Bash.
-- A domain pointing to the server and a valid TLS certificate. The supplied deployment mounts `/etc/letsencrypt`; step 2 covers obtaining a certificate.
+- A domain pointing to the server and a valid TLS certificate. The supplied deployment mounts only that certificate's lineage from `/etc/letsencrypt`; step 2 covers obtaining a certificate.
 - An available TCP port for the VPN, normally `443`. Public HTTPS access to the panel additionally uses `8443/tcp`.
 - OpenSSL on the server for a new VPN configuration, or Python **3.11+** to import an existing installation. The checks below use `curl`.
 
@@ -62,9 +62,12 @@ On the server:
 
 ```sh
 install -d -m 700 runtime runtime/state runtime/panel
+chown 10001:10001 runtime/panel
 cp deploy/env.example deploy/.env
 chmod 600 deploy/.env
 ```
+
+The panel container runs as the unprivileged user `10001`, so it must own `runtime/panel`. The endpoint container still runs as root to read the Let's Encrypt private key.
 
 Leave `runtime/config` absent until you choose a configuration method in step 3. The TrustTunnel binary is downloaded during the Docker image build; its version and archive SHA-256 are pinned in [the Dockerfile](../deploy/endpoint.Dockerfile).
 
@@ -86,7 +89,7 @@ Find the actual certificate paths:
 certbot certificates
 ```
 
-You will need `fullchain.pem` and `privkey.pem`. The certificate directory name may differ from your domain. Compose mounts the entire `/etc/letsencrypt` tree so that `live/` symlinks into `archive/` keep working.
+You will need `fullchain.pem` and `privkey.pem`. The certificate directory name may differ from your domain; note it for `TT_CERT_NAME` in step 3. Compose mounts only `live/<name>` and `archive/<name>` at their original paths: the `live/` symlinks into `archive/` keep working, and other certificates and keys on the server stay out of the containers.
 
 ## 3. Set deployment options and configure TrustTunnel
 
@@ -94,6 +97,7 @@ Edit `deploy/.env` and **replace** `TT_PUBLIC_ADDRESS` with your public VPN addr
 
 ```ini
 TT_PUBLIC_ADDRESS=vpn.example.com:443
+TT_CERT_NAME=vpn.example.com
 TT_BIND_IP=0.0.0.0
 TT_PORT=443
 PANEL_PORT=8080
@@ -102,7 +106,7 @@ PANEL_ALLOWED_HOSTS=
 PANEL_TRUSTED_PROXIES=
 ```
 
-`TT_PORT` is the external VPN port. If you change it, use the same port in `TT_PUBLIC_ADDRESS`. The internal listener in `vpn.toml` remains `0.0.0.0:8443`.
+`TT_CERT_NAME` is the certificate directory name under `/etc/letsencrypt/live/` from step 2. `TT_PORT` is the external VPN port. If you change it, use the same port in `TT_PUBLIC_ADDRESS`. The internal listener in `vpn.toml` remains `0.0.0.0:8443`.
 
 Check that `PANEL_PROXY_SUBNET` in `.env` does not overlap your existing Docker or VPN networks. If necessary, change the subnet and choose `PANEL_PROXY_IP` inside it. Leave the optional HTTPS profile disabled for this initial setup.
 

@@ -16,7 +16,7 @@ ssl_certificate /etc/letsencrypt/live/vpn.example.com/fullchain.pem;
 ssl_certificate_key /etc/letsencrypt/live/vpn.example.com/privkey.pem;
 ```
 
-Use the actual lineage paths from `certbot certificates`; the directory name may differ from the domain. The full `/etc/letsencrypt` tree is mounted read-only so that `live/` symlinks into `archive/` work after renewal.
+Use the actual lineage paths from `certbot certificates`; the directory name may differ from the domain. Only the lineage named by `TT_CERT_NAME` in `.env` is mounted, read-only: its `live/` and `archive/` directories, so that symlinks keep working after renewal. nginx uses the same lineage unless `PANEL_CERT_NAME` in `.env` names a separate one for the panel domain; the certificate paths in `nginx.conf` must belong to the mounted lineage.
 
 Set these values in `deploy/.env`:
 
@@ -30,7 +30,9 @@ PANEL_PROXY_IP=172.30.80.3
 PANEL_TRUSTED_PROXIES=172.30.80.3
 ```
 
-`PANEL_ALLOWED_HOSTS` takes a hostname without scheme or port. Check that the Docker subnet does not overlap existing Docker or VPN networks. If you change it, choose a fixed `PANEL_PROXY_IP` inside that subnet and set `PANEL_TRUSTED_PROXIES` to the same address. This allows the panel to use nginx's `X-Real-IP` for login limits and audit records; other peers cannot supply a trusted client address.
+`PANEL_ALLOWED_HOSTS` takes a hostname without scheme or port. Check that the Docker subnet does not overlap existing Docker or VPN networks. If you change it, choose a fixed `PANEL_PROXY_IP` inside that subnet and set `PANEL_TRUSTED_PROXIES` to the same address. This allows the panel to use nginx's `X-Real-IP` for login limits and audit records; other peers cannot supply a trusted client address. Without it, every client shares nginx's address and one client's failed logins block everyone; the panel logs a warning at startup in that case.
+
+With `PANEL_COOKIE_SECURE=true`, the panel also sends `Strict-Transport-Security` and names its cookies with the `__Host-` prefix, so browsers accept them only over HTTPS for this exact host.
 
 Allow incoming TCP port `8443` in the server/provider network rules. Validate nginx and recreate only the panel and proxy:
 
@@ -56,14 +58,13 @@ Keep nginx's `proxy_set_header Host $http_host`: the panel checks the full reque
 
 **Configure renewal reloads even when the panel is accessed only through SSH: TrustTunnel itself needs the certificate.** Certbot on the host handles issuance and renewal; the panel does neither.
 
-In `deploy/certbot-deploy-hook.sh`, save the correct default lineage and installation directory in the file itself:
+The hook reads `TT_CERT_NAME` and `PANEL_CERT_NAME` from `deploy/.env`, so it reacts to the same lineages that Compose mounts. If the installation is not in `/opt/tunnelapanel`, save its directory in `deploy/certbot-deploy-hook.sh` itself:
 
 ```sh
-lineage=${TT_CERT_LINEAGE:-/etc/letsencrypt/live/vpn.example.com}
 panel_dir=${TT_PANEL_DIR:-/opt/tunnelapanel}
 ```
 
-Interactive SSH environment variables are not a persistent configuration for automated Certbot runs. Use the actual certificate lineage, not necessarily the domain name. Before migration, inspect existing deploy hooks and back them up: an old hook must not start the previous VPN service after cutover. Keep hooks needed by other certificates/services.
+Interactive SSH environment variables are not a persistent configuration for automated Certbot runs. Before migration, inspect existing deploy hooks and back them up: an old hook must not start the previous VPN service after cutover. Keep hooks needed by other certificates/services.
 
 Back up an existing target hook, then install and manually test the new one:
 

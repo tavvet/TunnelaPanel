@@ -14,7 +14,7 @@ Use **Go 1.25 or newer**, as required by `go.mod`. HTML, CSS and JavaScript are 
 | `deploy/` | Compose, Dockerfiles, nginx and Certbot hook |
 | `scripts/` | Release packaging, configuration import and checks |
 
-The panel calls the endpoint agent over a Unix socket in a shared volume. The agent controls its own TrustTunnel child process; neither container receives the Docker socket. Native TOML configuration and atomic JSON state persist under `runtime/`. This single-server, single-administrator design has no separate database service. See [configuration](./configuration.md) and [operations](./operations.md).
+The panel calls the endpoint agent over a Unix socket in a shared volume. The agent controls its own TrustTunnel child process; neither container receives the Docker socket. The agent runs as root with primary group `10001` and gives that group access to the socket only (directory `0710`, socket `0660`); the panel runs as `10001:10001`, so changing either user or group in `deploy/compose.yml` breaks the connection. The panel is not on the endpoint's Docker network: VPN client traffic leaves from the endpoint container and must not reach the panel. Native TOML configuration and atomic JSON state persist under `runtime/`. This single-server, single-administrator design has no separate database service. See [configuration](./configuration.md) and [operations](./operations.md).
 
 ## Reading and editing the Go code
 

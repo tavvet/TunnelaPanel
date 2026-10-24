@@ -27,6 +27,9 @@ func New(c Config) (*Agent, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err = checkCertificateFiles(c.ConfigDir); err != nil {
+		return nil, err
+	}
 	if err = recoverTransaction(c.StateDir, credentials); err != nil {
 		return nil, err
 	}

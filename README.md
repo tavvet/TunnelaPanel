@@ -36,6 +36,6 @@ Each guide has an English/Russian language switch at the top.
 
 ## Current scope
 
-One TrustTunnel server and one administrator. The stack runs the panel and the TrustTunnel supervisor in separate containers, with an optional nginx container for HTTPS. The panel and supervisor communicate through a Unix socket; the Docker socket is not mounted.
+One TrustTunnel server and one administrator. The stack runs the panel and the TrustTunnel supervisor in separate containers, with an optional nginx container for HTTPS. The panel and supervisor communicate through a Unix socket; the Docker socket is not mounted. The panel runs as an unprivileged user on a Docker network separate from the VPN endpoint, and the containers see only the configured Let's Encrypt certificate.
 
 The supplied deployment pins TrustTunnel **1.1.0** and publishes TCP only; QUIC/HTTP/3 is not enabled. Applying user changes briefly restarts the VPN. Traffic counters reset when TrustTunnel restarts.
